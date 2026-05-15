@@ -40,6 +40,11 @@ describe("Sidebar", () => {
       "href",
       "/dashboard/teacher-contracts",
     );
+    expect(screen.getByRole("link", { name: "Billing" })).toHaveAttribute("href", "/dashboard/billing");
+    expect(screen.getByRole("link", { name: "Fee Plans" })).toHaveAttribute("href", "/dashboard/billing/fee-plans");
+    expect(screen.getByRole("link", { name: "Dues" })).toHaveAttribute("href", "/dashboard/billing/dues");
+    expect(screen.getByRole("link", { name: "Invoices" })).toHaveAttribute("href", "/dashboard/billing/invoices");
+    expect(screen.getByRole("link", { name: "Payments" })).toHaveAttribute("href", "/dashboard/billing/payments");
     expect(screen.getByText("Admin User")).toBeInTheDocument();
   });
 

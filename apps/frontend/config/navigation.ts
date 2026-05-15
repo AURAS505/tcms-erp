@@ -67,6 +67,31 @@ export const navigationItems: NavItem[] = [
     label: "Teacher Contracts",
     roles: allRoles,
   },
+  {
+    href: "/dashboard/billing",
+    label: "Billing",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/billing/fee-plans",
+    label: "Fee Plans",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/billing/dues",
+    label: "Dues",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/billing/invoices",
+    label: "Invoices",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/billing/payments",
+    label: "Payments",
+    roles: allRoles,
+  },
 ];
 
 export function getNavigationForRoles(roles: Role[]) {

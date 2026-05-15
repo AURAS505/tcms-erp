@@ -16,13 +16,22 @@ const statusStyles: Record<string, string> = {
   on_break: "bg-yellow-50 text-yellow-700",
   on_leave: "bg-yellow-50 text-yellow-700",
   open: "bg-blue-50 text-blue-700",
+  paid: "bg-green-50 text-green-700",
+  partial: "bg-yellow-50 text-yellow-700",
   paused: "bg-yellow-50 text-yellow-700",
+  posted: "bg-green-50 text-green-700",
   pending: "bg-yellow-50 text-yellow-700",
   pending_approval: "bg-yellow-50 text-yellow-700",
   pending_review: "bg-yellow-50 text-yellow-700",
   rejected: "bg-red-50 text-red-700",
+  refunded: "bg-indigo-50 text-indigo-700",
   resigned: "bg-orange-50 text-orange-700",
+  submitted: "bg-blue-50 text-blue-700",
   terminated: "bg-red-50 text-red-700",
+  unpaid: "bg-orange-50 text-orange-700",
+  voided: "bg-red-50 text-red-700",
+  waived: "bg-indigo-50 text-indigo-700",
+  written_off: "bg-slate-100 text-slate-700",
 };
 
 const formatStatus = (status: string) =>
