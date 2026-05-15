@@ -29,7 +29,7 @@ export function Sidebar({ user }: SidebarProps) {
         <nav className="flex-1 space-y-1 px-3 py-4">
           <p className="px-3 pb-2 text-[11px] font-semibold uppercase text-slate-400">Core</p>
           {items.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
             return (
               <Link
                 className={`block rounded-md px-3 py-2 text-sm font-medium transition ${

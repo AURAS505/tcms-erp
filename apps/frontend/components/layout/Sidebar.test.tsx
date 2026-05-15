@@ -25,6 +25,11 @@ describe("Sidebar", () => {
 
     const dashboardLink = screen.getByRole("link", { name: "Dashboard" });
     expect(dashboardLink).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: "Students" })).toHaveAttribute("href", "/dashboard/students");
+    expect(screen.getByRole("link", { name: "Student Inquiries" })).toHaveAttribute(
+      "href",
+      "/dashboard/student-inquiries",
+    );
     expect(screen.getByText("Admin User")).toBeInTheDocument();
   });
 

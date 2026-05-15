@@ -6,6 +6,14 @@ export interface ApiEnvelope<T> {
   meta?: Record<string, unknown>;
 }
 
+export interface ApiPaginationMeta {
+  count: number;
+  page: number;
+  page_size: number;
+  next: string | null;
+  previous: string | null;
+}
+
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
 
 const getApiBaseUrl = () =>
@@ -43,7 +51,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiClient<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiClientEnvelope<T>(path: string, init: RequestInit = {}): Promise<ApiEnvelope<T>> {
   const response = await fetch(buildUrl(path), {
     ...init,
     credentials: "include",
@@ -64,6 +72,10 @@ export async function apiClient<T>(path: string, init: RequestInit = {}): Promis
     );
   }
 
-  return payload.data;
+  return payload;
 }
 
+export async function apiClient<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const payload = await apiClientEnvelope<T>(path, init);
+  return payload.data;
+}
