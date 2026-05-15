@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "TCMS ERP",
-  description: "Enterprise education management system",
+  description: "Enterprise education management system authentication foundation",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

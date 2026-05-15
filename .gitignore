@@ -15,6 +15,7 @@ node_modules/
 out/
 coverage/
 dist/
+*.tsbuildinfo
 
 .DS_Store
 Thumbs.db
