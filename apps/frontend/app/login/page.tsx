@@ -14,6 +14,17 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+const getSafeRedirectPath = () => {
+  if (typeof window === "undefined") return "/dashboard";
+
+  const redirectPath = new URLSearchParams(window.location.search).get("redirect");
+  if (!redirectPath || !redirectPath.startsWith("/dashboard") || redirectPath.startsWith("//")) {
+    return "/dashboard";
+  }
+
+  return redirectPath;
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
@@ -40,7 +51,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       const user = await login(result.data);
-      router.push(user.forcePasswordChange ? "/force-password-change" : "/dashboard");
+      router.push(user.forcePasswordChange ? "/force-password-change" : getSafeRedirectPath());
       router.refresh();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to sign in");

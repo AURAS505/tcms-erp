@@ -32,6 +32,7 @@ describe("LoginPage", () => {
 
   beforeEach(() => {
     login.mockReset();
+    window.history.pushState({}, "", "/login");
     vi.mocked(useAuth).mockReturnValue({
       branchAssignments: [],
       error: null,
@@ -68,6 +69,19 @@ describe("LoginPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard"));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("redirects to requested dashboard path after successful login", async () => {
+    window.history.pushState({}, "", "/login?redirect=%2Fdashboard%2Freports%3Ftab%3Dsummary");
+    login.mockResolvedValue(user);
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: "admin@tcms.test" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "StrongPass123!" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard/reports?tab=summary"));
     expect(refresh).toHaveBeenCalled();
   });
 
