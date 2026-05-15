@@ -14,11 +14,15 @@ const statusStyles: Record<string, string> = {
   left: "bg-orange-50 text-orange-700",
   new: "bg-blue-50 text-blue-700",
   on_break: "bg-yellow-50 text-yellow-700",
+  on_leave: "bg-yellow-50 text-yellow-700",
+  open: "bg-blue-50 text-blue-700",
   paused: "bg-yellow-50 text-yellow-700",
   pending: "bg-yellow-50 text-yellow-700",
   pending_approval: "bg-yellow-50 text-yellow-700",
   pending_review: "bg-yellow-50 text-yellow-700",
   rejected: "bg-red-50 text-red-700",
+  resigned: "bg-orange-50 text-orange-700",
+  terminated: "bg-red-50 text-red-700",
 };
 
 const formatStatus = (status: string) =>
