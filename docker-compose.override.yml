@@ -1,0 +1,8 @@
+services:
+  backend:
+    environment:
+      DJANGO_DEBUG: "true"
+
+  frontend:
+    environment:
+      NODE_ENV: development
