@@ -581,6 +581,22 @@ class BillingDiscount(BaseModel):
     def __str__(self) -> str:
         return f"{self.student.admission_number} - {self.get_discount_type_display()}"
 
+    @property
+    def is_immutable(self) -> bool:
+        return self.status == self.Status.APPROVED
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            existing_status = type(self).objects.only("status").get(pk=self.pk).status
+            if existing_status == self.Status.APPROVED and not getattr(self, "_allow_immutable_update", False):
+                raise ValidationError("Approved discounts are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.is_immutable:
+            raise ValidationError("Approved discounts cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
 
 class BillingWaiver(BaseModel):
     class Status(models.TextChoices):
@@ -623,6 +639,22 @@ class BillingWaiver(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.student.admission_number} waiver {self.waiver_amount}"
+
+    @property
+    def is_immutable(self) -> bool:
+        return self.status == self.Status.APPROVED
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            existing_status = type(self).objects.only("status").get(pk=self.pk).status
+            if existing_status == self.Status.APPROVED and not getattr(self, "_allow_immutable_update", False):
+                raise ValidationError("Approved waivers are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.is_immutable:
+            raise ValidationError("Approved waivers cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
 
 class BillingFine(BaseModel):
@@ -673,6 +705,22 @@ class BillingFine(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.student.admission_number} fine {self.amount}"
+
+    @property
+    def is_immutable(self) -> bool:
+        return self.status == self.Status.APPROVED
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            existing_status = type(self).objects.only("status").get(pk=self.pk).status
+            if existing_status == self.Status.APPROVED and not getattr(self, "_allow_immutable_update", False):
+                raise ValidationError("Approved fines are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.is_immutable:
+            raise ValidationError("Approved fines cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
 
 class StudentRefund(BaseModel):
@@ -746,6 +794,22 @@ class StudentRefund(BaseModel):
 
     def __str__(self) -> str:
         return self.refund_voucher_number or f"{self.student.admission_number} refund"
+
+    @property
+    def is_immutable(self) -> bool:
+        return self.status == self.Status.PAID
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            existing_status = type(self).objects.only("status").get(pk=self.pk).status
+            if existing_status == self.Status.PAID and not getattr(self, "_allow_immutable_update", False):
+                raise ValidationError("Paid refunds are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.is_immutable:
+            raise ValidationError("Paid refunds cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
     def clean(self) -> None:
         super().clean()

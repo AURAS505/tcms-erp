@@ -12,12 +12,16 @@ from common.audit import AuditAction, AuditLogService, AuditModule, serialize_mo
 from common.money import ZERO_MONEY, quantize_money
 
 from .models import (
+    BillingDiscount,
+    BillingFine,
+    BillingWaiver,
     BillStatus,
     StudentAdvanceBalance,
     StudentFeeDue,
     StudentInvoice,
     StudentPayment,
     StudentPaymentAllocation,
+    StudentRefund,
 )
 
 
@@ -36,6 +40,9 @@ class StudentPaymentService:
     WALLET_ACCOUNT_CODE = "1130"
     STUDENT_RECEIVABLE_CODE = "1210"
     STUDENT_ADVANCE_REVENUE_CODE = "2210"
+    FINE_INCOME_CODE = "4400"
+    DISCOUNT_ALLOWED_CODE = "5700"
+    BAD_DEBT_EXPENSE_CODE = "5800"
 
     @classmethod
     @transaction.atomic
@@ -441,3 +448,682 @@ class StudentPaymentService:
             return Account.objects.get(organization_id=organization_id, code=code, is_active=True)
         except Account.DoesNotExist as exc:
             raise ValidationError(f"Missing accounting account configuration for code `{code}`.") from exc
+
+
+class AdvanceApplicationService(StudentPaymentService):
+    @classmethod
+    @transaction.atomic
+    def apply_advance_to_due(cls, *, student, due_id, amount, applied_by=None) -> StudentFeeDue:
+        due = StudentFeeDue.objects.select_for_update().get(id=due_id)
+        cls._validate_advance_target_scope(student=student, due=due)
+        amount = quantize_money(amount)
+        if amount <= ZERO_MONEY:
+            raise ValidationError("Advance application amount must be greater than zero.")
+        if amount > due.balance_amount:
+            raise ValidationError("Advance application cannot exceed due balance.")
+
+        cls.validate_available_advance_balance(
+            organization=due.organization,
+            branch=due.branch,
+            academic_year=due.academic_year,
+            student=student,
+            amount=amount,
+        )
+
+        cls.update_student_advance_balance(
+            organization=due.organization,
+            branch=due.branch,
+            academic_year=due.academic_year,
+            student=student,
+            applied_amount=amount,
+        )
+        cls.update_due_or_invoice_balance(target=due, amount=amount)
+        journal = cls.post_advance_application_journal(
+            organization=due.organization,
+            branch=due.branch,
+            academic_year=due.academic_year,
+            student=student,
+            amount=amount,
+            entry_date_ad=timezone.now().date(),
+            entry_date_bs="",
+            posted_by=applied_by,
+            source_number=f"ADV-APPLY-DUE-{due.id}",
+        )
+        AuditLogService.record(
+            action=AuditAction.POST,
+            module=AuditModule.BILLING,
+            obj=due,
+            user=applied_by,
+            metadata={"event": "advance_applied_to_due", "amount": str(amount), "journal_entry_id": str(journal.id)},
+        )
+        return due
+
+    @classmethod
+    @transaction.atomic
+    def apply_advance_to_invoice(cls, *, student, invoice_id, amount, applied_by=None) -> StudentInvoice:
+        invoice = StudentInvoice.objects.select_for_update().get(id=invoice_id)
+        cls._validate_advance_target_scope(student=student, invoice=invoice)
+        amount = quantize_money(amount)
+        if amount <= ZERO_MONEY:
+            raise ValidationError("Advance application amount must be greater than zero.")
+        if amount > invoice.balance_amount:
+            raise ValidationError("Advance application cannot exceed invoice balance.")
+
+        cls.validate_available_advance_balance(
+            organization=invoice.organization,
+            branch=invoice.branch,
+            academic_year=invoice.academic_year,
+            student=student,
+            amount=amount,
+        )
+        cls.update_student_advance_balance(
+            organization=invoice.organization,
+            branch=invoice.branch,
+            academic_year=invoice.academic_year,
+            student=student,
+            applied_amount=amount,
+        )
+        cls.update_due_or_invoice_balance(target=invoice, amount=amount)
+        journal = cls.post_advance_application_journal(
+            organization=invoice.organization,
+            branch=invoice.branch,
+            academic_year=invoice.academic_year,
+            student=student,
+            amount=amount,
+            entry_date_ad=timezone.now().date(),
+            entry_date_bs="",
+            posted_by=applied_by,
+            source_number=f"ADV-APPLY-INV-{invoice.id}",
+        )
+        AuditLogService.record(
+            action=AuditAction.POST,
+            module=AuditModule.BILLING,
+            obj=invoice,
+            user=applied_by,
+            metadata={"event": "advance_applied_to_invoice", "amount": str(amount), "journal_entry_id": str(journal.id)},
+        )
+        return invoice
+
+    @classmethod
+    def _validate_advance_target_scope(cls, *, student, due=None, invoice=None) -> None:
+        target = due or invoice
+        if student.id != target.student_id:
+            raise ValidationError("Advance application student must match the target due/invoice student.")
+        if student.organization_id != target.organization_id or student.branch_id != target.branch_id:
+            raise ValidationError("Advance application scope mismatch for organization/branch.")
+        if student.academic_year_id != target.academic_year_id:
+            raise ValidationError("Advance application academic year mismatch.")
+
+    @classmethod
+    def validate_available_advance_balance(cls, *, organization, branch, academic_year, student, amount: Decimal) -> None:
+        balance = (
+            StudentAdvanceBalance.objects.select_for_update()
+            .filter(organization=organization, branch=branch, academic_year=academic_year, student=student)
+            .first()
+        )
+        available = balance.balance_amount if balance else ZERO_MONEY
+        if amount > available:
+            raise ValidationError("Advance application exceeds available advance balance.")
+
+    @classmethod
+    def update_student_advance_balance(
+        cls,
+        *,
+        organization,
+        branch,
+        academic_year,
+        student,
+        applied_amount=ZERO_MONEY,
+        refunded_amount=ZERO_MONEY,
+    ) -> StudentAdvanceBalance:
+        advance, _ = StudentAdvanceBalance.objects.select_for_update().get_or_create(
+            organization=organization,
+            branch=branch,
+            academic_year=academic_year,
+            student=student,
+            defaults={
+                "opening_amount": ZERO_MONEY,
+                "received_amount": ZERO_MONEY,
+                "applied_amount": ZERO_MONEY,
+                "refunded_amount": ZERO_MONEY,
+                "balance_amount": ZERO_MONEY,
+            },
+        )
+        advance.applied_amount = quantize_money(advance.applied_amount + quantize_money(applied_amount))
+        advance.refunded_amount = quantize_money(advance.refunded_amount + quantize_money(refunded_amount))
+        advance.balance_amount = quantize_money(
+            advance.opening_amount + advance.received_amount - advance.applied_amount - advance.refunded_amount
+        )
+        if advance.balance_amount < ZERO_MONEY:
+            raise ValidationError("Advance balance cannot be negative.")
+        advance.save(update_fields=["applied_amount", "refunded_amount", "balance_amount", "updated_at"])
+        return advance
+
+    @classmethod
+    def update_due_or_invoice_balance(cls, *, target, amount: Decimal):
+        amount = quantize_money(amount)
+        if isinstance(target, StudentFeeDue):
+            target.paid_amount = quantize_money(target.paid_amount + amount)
+            if target.paid_amount > target.net_amount:
+                raise ValidationError("Due paid amount cannot exceed due net amount.")
+            target.balance_amount = quantize_money(target.net_amount - target.paid_amount)
+            if target.balance_amount == ZERO_MONEY:
+                target.status = BillStatus.PAID
+            elif target.paid_amount > ZERO_MONEY:
+                target.status = BillStatus.PARTIAL
+            target.save(update_fields=["paid_amount", "balance_amount", "status", "updated_at"])
+        else:
+            target.paid_amount = quantize_money(target.paid_amount + amount)
+            if target.paid_amount > target.total_amount:
+                raise ValidationError("Invoice paid amount cannot exceed invoice total amount.")
+            target.balance_amount = quantize_money(target.total_amount - target.paid_amount)
+            if target.balance_amount == ZERO_MONEY:
+                target.status = BillStatus.PAID
+            elif target.paid_amount > ZERO_MONEY:
+                target.status = BillStatus.PARTIAL
+            target.save(update_fields=["paid_amount", "balance_amount", "status", "updated_at"])
+        return target
+
+    @classmethod
+    def post_advance_application_journal(
+        cls,
+        *,
+        organization,
+        branch,
+        academic_year,
+        student,
+        amount: Decimal,
+        entry_date_ad,
+        entry_date_bs,
+        posted_by=None,
+        source_number: str = "",
+    ) -> JournalEntry:
+        debit_account = cls._get_account_by_code(organization_id=organization.id, code=cls.STUDENT_ADVANCE_REVENUE_CODE)
+        credit_account = cls._get_account_by_code(organization_id=organization.id, code=cls.STUDENT_RECEIVABLE_CODE)
+        entry_number = cls._generate_journal_entry_number(organization_id=organization.id)
+        entry = JournalEntry.objects.create(
+            organization=organization,
+            branch=branch,
+            academic_year=academic_year,
+            entry_number=entry_number,
+            entry_date_ad=entry_date_ad,
+            entry_date_bs=entry_date_bs or "",
+            description="Advance application to receivable",
+            source_type=JournalEntry.SourceType.SYSTEM,
+            source_app="billing",
+            source_model="AdvanceApplication",
+            source_number=source_number,
+            status=JournalEntry.Status.APPROVED,
+            is_system_generated=True,
+            created_by=posted_by,
+            approved_by=posted_by,
+        )
+        JournalEntryLine.objects.create(
+            journal_entry=entry,
+            organization=organization,
+            branch=branch,
+            account=debit_account,
+            debit_amount=amount,
+            credit_amount=ZERO_MONEY,
+            student_id=student.id,
+        )
+        JournalEntryLine.objects.create(
+            journal_entry=entry,
+            organization=organization,
+            branch=branch,
+            account=credit_account,
+            debit_amount=ZERO_MONEY,
+            credit_amount=amount,
+            student_id=student.id,
+        )
+        return AccountingPostingService.post_journal_entry(entry, posted_by=posted_by)
+
+
+class BillingAdjustmentService(StudentPaymentService):
+    @classmethod
+    @transaction.atomic
+    def approve_discount(cls, *, discount_id, approved_by):
+        discount = BillingDiscount.objects.select_for_update().get(id=discount_id)
+        cls._validate_maker_checker(discount=discount, approver=approved_by)
+        amount = cls._resolve_discount_amount(discount=discount)
+        target = cls._get_discount_target(discount)
+        if amount <= ZERO_MONEY:
+            raise ValidationError("Discount amount must be greater than zero.")
+        if amount > target.balance_amount:
+            raise ValidationError("Discount cannot exceed due/invoice balance.")
+
+        cls._apply_discount_to_target(target=target, amount=amount)
+        journal = cls._post_adjustment_journal(
+            organization=discount.organization,
+            branch=discount.branch,
+            academic_year=discount.academic_year,
+            student=discount.student,
+            amount=amount,
+            debit_code=cls.DISCOUNT_ALLOWED_CODE,
+            credit_code=cls.STUDENT_RECEIVABLE_CODE,
+            description="Discount approved",
+            source_model="BillingDiscount",
+            source_number=str(discount.id),
+            posted_by=approved_by,
+        )
+        discount.status = BillingDiscount.Status.APPROVED
+        discount.approved_by = approved_by
+        discount.approved_at = timezone.now()
+        discount._allow_immutable_update = True
+        discount.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
+        AuditLogService.record(
+            action=AuditAction.APPROVE,
+            module=AuditModule.BILLING,
+            obj=discount,
+            user=approved_by,
+            metadata={"event": "discount_approved", "amount": str(amount), "journal_entry_id": str(journal.id)},
+        )
+        return discount
+
+    @classmethod
+    @transaction.atomic
+    def approve_waiver(cls, *, waiver_id, approved_by):
+        waiver = BillingWaiver.objects.select_for_update().get(id=waiver_id)
+        amount = quantize_money(waiver.waiver_amount)
+        if amount <= ZERO_MONEY:
+            raise ValidationError("Waiver amount must be greater than zero.")
+        target = waiver.fee_due or waiver.invoice
+        if target is None:
+            raise ValidationError("Waiver must target either a due or an invoice.")
+        if amount > target.balance_amount:
+            raise ValidationError("Waiver cannot exceed due/invoice balance.")
+
+        cls._apply_writeoff_to_target(target=target, amount=amount)
+        journal = cls._post_adjustment_journal(
+            organization=waiver.organization,
+            branch=waiver.branch,
+            academic_year=waiver.academic_year,
+            student=waiver.student,
+            amount=amount,
+            debit_code=cls.BAD_DEBT_EXPENSE_CODE,
+            credit_code=cls.STUDENT_RECEIVABLE_CODE,
+            description="Waiver/write-off approved",
+            source_model="BillingWaiver",
+            source_number=str(waiver.id),
+            posted_by=approved_by,
+        )
+        waiver.status = BillingWaiver.Status.APPROVED
+        waiver.approved_by = approved_by
+        waiver.approved_at = timezone.now()
+        waiver._allow_immutable_update = True
+        waiver.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
+        AuditLogService.record(
+            action=AuditAction.APPROVE,
+            module=AuditModule.BILLING,
+            obj=waiver,
+            user=approved_by,
+            metadata={"event": "waiver_approved", "amount": str(amount), "journal_entry_id": str(journal.id)},
+        )
+        return waiver
+
+    @classmethod
+    @transaction.atomic
+    def approve_fine(cls, *, fine_id, approved_by):
+        fine = BillingFine.objects.select_for_update().get(id=fine_id)
+        amount = quantize_money(fine.amount)
+        if amount <= ZERO_MONEY:
+            raise ValidationError("Fine amount must be greater than zero.")
+        target = fine.fee_due or fine.invoice
+        if target is None:
+            raise ValidationError("Fine must target either a due or an invoice.")
+
+        cls._apply_fine_to_target(target=target, amount=amount)
+        journal = cls._post_adjustment_journal(
+            organization=fine.organization,
+            branch=fine.branch,
+            academic_year=fine.academic_year,
+            student=fine.student,
+            amount=amount,
+            debit_code=cls.STUDENT_RECEIVABLE_CODE,
+            credit_code=cls.FINE_INCOME_CODE,
+            description="Fine approved",
+            source_model="BillingFine",
+            source_number=str(fine.id),
+            posted_by=approved_by,
+        )
+        fine.status = BillingFine.Status.APPROVED
+        fine.approved_by = approved_by
+        fine.approved_at = timezone.now()
+        fine._allow_immutable_update = True
+        fine.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
+        AuditLogService.record(
+            action=AuditAction.APPROVE,
+            module=AuditModule.BILLING,
+            obj=fine,
+            user=approved_by,
+            metadata={"event": "fine_approved", "amount": str(amount), "journal_entry_id": str(journal.id)},
+        )
+        return fine
+
+    @classmethod
+    def reject_adjustment(cls, *, adjustment, rejected_by=None, reason: str = ""):
+        if hasattr(adjustment, "Status"):
+            rejected_value = getattr(adjustment.Status, "REJECTED", None)
+            if rejected_value is None:
+                raise ValidationError("Adjustment does not support rejection.")
+            adjustment.status = rejected_value
+            if hasattr(adjustment, "notes") and reason:
+                adjustment.notes = f"{adjustment.notes}\nRejected: {reason}".strip()
+            adjustment.save(update_fields=["status", "notes", "updated_at"] if hasattr(adjustment, "notes") else ["status", "updated_at"])
+            AuditLogService.record(
+                action=AuditAction.UPDATE,
+                module=AuditModule.BILLING,
+                obj=adjustment,
+                user=rejected_by,
+                metadata={"event": "adjustment_rejected", "reason": reason},
+            )
+        return adjustment
+
+    @classmethod
+    def cancel_adjustment_placeholder(cls, *, adjustment, cancelled_by=None, reason: str = ""):
+        if hasattr(adjustment, "Status") and hasattr(adjustment.Status, "CANCELLED"):
+            adjustment.status = adjustment.Status.CANCELLED
+            if hasattr(adjustment, "notes") and reason:
+                adjustment.notes = f"{adjustment.notes}\nCancelled: {reason}".strip()
+            adjustment.save(update_fields=["status", "notes", "updated_at"] if hasattr(adjustment, "notes") else ["status", "updated_at"])
+            AuditLogService.record(
+                action=AuditAction.UPDATE,
+                module=AuditModule.BILLING,
+                obj=adjustment,
+                user=cancelled_by,
+                metadata={"event": "adjustment_cancelled", "reason": reason},
+            )
+        return adjustment
+
+    @classmethod
+    def _validate_maker_checker(cls, *, discount: BillingDiscount, approver) -> None:
+        if hasattr(discount, "created_by_id") and discount.created_by_id and discount.created_by_id == approver.id:
+            raise ValidationError("Maker-checker violation: creator cannot approve discount.")
+
+    @classmethod
+    def _resolve_discount_amount(cls, *, discount: BillingDiscount) -> Decimal:
+        target = cls._get_discount_target(discount)
+        if discount.discount_amount is not None:
+            return quantize_money(discount.discount_amount)
+        if discount.discount_percentage is None:
+            raise ValidationError("Discount requires either amount or percentage.")
+        return quantize_money(target.balance_amount * (discount.discount_percentage / Decimal("100")))
+
+    @classmethod
+    def _get_discount_target(cls, discount: BillingDiscount):
+        target = discount.fee_due or discount.invoice
+        if target is None:
+            raise ValidationError("Discount must target either a due or an invoice.")
+        return target
+
+    @classmethod
+    def _apply_discount_to_target(cls, *, target, amount: Decimal) -> None:
+        if isinstance(target, StudentFeeDue):
+            target.discount_amount = quantize_money(target.discount_amount + amount)
+            target.net_amount = quantize_money(target.original_amount - target.discount_amount + target.fine_amount)
+            if target.paid_amount > target.net_amount:
+                raise ValidationError("Discount causes paid amount to exceed due net amount.")
+            target.balance_amount = quantize_money(target.net_amount - target.paid_amount)
+            if target.balance_amount == ZERO_MONEY and target.paid_amount == target.net_amount:
+                target.status = BillStatus.PAID
+            elif target.paid_amount > ZERO_MONEY:
+                target.status = BillStatus.PARTIAL
+            else:
+                target.status = BillStatus.UNPAID
+            target.save(update_fields=["discount_amount", "net_amount", "balance_amount", "status", "updated_at"])
+        else:
+            target.discount_amount = quantize_money(target.discount_amount + amount)
+            target.total_amount = quantize_money(target.subtotal - target.discount_amount + target.fine_amount)
+            if target.paid_amount > target.total_amount:
+                raise ValidationError("Discount causes paid amount to exceed invoice total amount.")
+            target.balance_amount = quantize_money(target.total_amount - target.paid_amount)
+            if target.balance_amount == ZERO_MONEY and target.paid_amount == target.total_amount:
+                target.status = BillStatus.PAID
+            elif target.paid_amount > ZERO_MONEY:
+                target.status = BillStatus.PARTIAL
+            else:
+                target.status = BillStatus.UNPAID
+            target.save(update_fields=["discount_amount", "total_amount", "balance_amount", "status", "updated_at"])
+
+    @classmethod
+    def _apply_writeoff_to_target(cls, *, target, amount: Decimal) -> None:
+        if isinstance(target, StudentFeeDue):
+            target.paid_amount = quantize_money(target.paid_amount + amount)
+            if target.paid_amount > target.net_amount:
+                raise ValidationError("Waiver causes paid amount to exceed due net amount.")
+            target.balance_amount = quantize_money(target.net_amount - target.paid_amount)
+            target.status = BillStatus.WRITTEN_OFF if target.balance_amount == ZERO_MONEY else BillStatus.PARTIAL
+            target.save(update_fields=["paid_amount", "balance_amount", "status", "updated_at"])
+        else:
+            target.paid_amount = quantize_money(target.paid_amount + amount)
+            if target.paid_amount > target.total_amount:
+                raise ValidationError("Waiver causes paid amount to exceed invoice total amount.")
+            target.balance_amount = quantize_money(target.total_amount - target.paid_amount)
+            target.status = BillStatus.WRITTEN_OFF if target.balance_amount == ZERO_MONEY else BillStatus.PARTIAL
+            target.save(update_fields=["paid_amount", "balance_amount", "status", "updated_at"])
+
+    @classmethod
+    def _apply_fine_to_target(cls, *, target, amount: Decimal) -> None:
+        if isinstance(target, StudentFeeDue):
+            target.fine_amount = quantize_money(target.fine_amount + amount)
+            target.net_amount = quantize_money(target.original_amount - target.discount_amount + target.fine_amount)
+            target.balance_amount = quantize_money(target.net_amount - target.paid_amount)
+            target.status = BillStatus.PARTIAL if target.paid_amount > ZERO_MONEY else BillStatus.UNPAID
+            target.save(update_fields=["fine_amount", "net_amount", "balance_amount", "status", "updated_at"])
+        else:
+            target.fine_amount = quantize_money(target.fine_amount + amount)
+            target.total_amount = quantize_money(target.subtotal - target.discount_amount + target.fine_amount)
+            target.balance_amount = quantize_money(target.total_amount - target.paid_amount)
+            target.status = BillStatus.PARTIAL if target.paid_amount > ZERO_MONEY else BillStatus.UNPAID
+            target.save(update_fields=["fine_amount", "total_amount", "balance_amount", "status", "updated_at"])
+
+    @classmethod
+    def _post_adjustment_journal(
+        cls,
+        *,
+        organization,
+        branch,
+        academic_year,
+        student,
+        amount: Decimal,
+        debit_code: str,
+        credit_code: str,
+        description: str,
+        source_model: str,
+        source_number: str,
+        posted_by=None,
+    ) -> JournalEntry:
+        debit = cls._get_account_by_code(organization_id=organization.id, code=debit_code)
+        credit = cls._get_account_by_code(organization_id=organization.id, code=credit_code)
+        entry = JournalEntry.objects.create(
+            organization=organization,
+            branch=branch,
+            academic_year=academic_year,
+            entry_number=cls._generate_journal_entry_number(organization_id=organization.id),
+            entry_date_ad=timezone.now().date(),
+            entry_date_bs="",
+            description=description,
+            source_type=JournalEntry.SourceType.SYSTEM,
+            source_app="billing",
+            source_model=source_model,
+            source_number=source_number,
+            status=JournalEntry.Status.APPROVED,
+            is_system_generated=True,
+            created_by=posted_by,
+            approved_by=posted_by,
+        )
+        JournalEntryLine.objects.create(
+            journal_entry=entry,
+            organization=organization,
+            branch=branch,
+            account=debit,
+            debit_amount=amount,
+            credit_amount=ZERO_MONEY,
+            student_id=student.id,
+        )
+        JournalEntryLine.objects.create(
+            journal_entry=entry,
+            organization=organization,
+            branch=branch,
+            account=credit,
+            debit_amount=ZERO_MONEY,
+            credit_amount=amount,
+            student_id=student.id,
+        )
+        return AccountingPostingService.post_journal_entry(entry, posted_by=posted_by)
+
+
+class StudentRefundService(StudentPaymentService):
+    @classmethod
+    @transaction.atomic
+    def approve_refund(cls, *, refund_id, approved_by):
+        refund = StudentRefund.objects.select_for_update().get(id=refund_id)
+        if refund.requested_by_id and refund.requested_by_id == approved_by.id:
+            raise ValidationError("Maker-checker violation: requester cannot approve refund.")
+        if refund.status not in {StudentRefund.Status.DRAFT, StudentRefund.Status.PENDING_APPROVAL}:
+            raise ValidationError("Only draft/pending refunds can be approved.")
+        cls.validate_refund_source(refund=refund)
+        refund.status = StudentRefund.Status.APPROVED
+        refund.approved_by = approved_by
+        refund.approved_at = timezone.now()
+        refund.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
+        AuditLogService.record(
+            action=AuditAction.APPROVE,
+            module=AuditModule.BILLING,
+            obj=refund,
+            user=approved_by,
+            metadata={"event": "refund_approved", "amount": str(refund.refund_amount)},
+        )
+        return refund
+
+    @classmethod
+    @transaction.atomic
+    def pay_refund(cls, *, refund_id, paid_by):
+        refund = StudentRefund.objects.select_for_update().get(id=refund_id)
+        if refund.status != StudentRefund.Status.APPROVED:
+            raise ValidationError("Only approved refunds can be paid.")
+        cls.validate_refund_source(refund=refund)
+        amount = quantize_money(refund.refund_amount)
+        if amount <= ZERO_MONEY:
+            raise ValidationError("Refund amount must be greater than zero.")
+
+        advance = StudentAdvanceBalance.objects.select_for_update().filter(
+            organization=refund.organization,
+            branch=refund.branch,
+            academic_year=refund.academic_year,
+            student=refund.student,
+        ).first()
+        available = advance.balance_amount if advance else ZERO_MONEY
+        if amount > available:
+            raise ValidationError("Refund amount exceeds available advance balance.")
+
+        AdvanceApplicationService.update_student_advance_balance(
+            organization=refund.organization,
+            branch=refund.branch,
+            academic_year=refund.academic_year,
+            student=refund.student,
+            refunded_amount=amount,
+        )
+        journal = cls.post_refund_journal(refund=refund, posted_by=paid_by)
+        refund.status = StudentRefund.Status.PAID
+        refund.paid_by = paid_by
+        refund.paid_at = timezone.now()
+        refund._allow_immutable_update = True
+        refund.save(update_fields=["status", "paid_by", "paid_at", "updated_at"])
+        AuditLogService.record(
+            action=AuditAction.POST,
+            module=AuditModule.BILLING,
+            obj=refund,
+            user=paid_by,
+            metadata={"event": "refund_paid", "amount": str(amount), "journal_entry_id": str(journal.id)},
+        )
+        return refund
+
+    @classmethod
+    def cancel_refund_placeholder(cls, *, refund_id, cancelled_by=None, reason: str = ""):
+        refund = StudentRefund.objects.get(id=refund_id)
+        if refund.status == StudentRefund.Status.PAID:
+            raise ValidationError("Cannot cancel a paid refund.")
+        refund.status = StudentRefund.Status.CANCELLED
+        if reason:
+            refund.notes = f"{refund.notes}\nCancelled: {reason}".strip()
+        refund.save(update_fields=["status", "notes", "updated_at"])
+        AuditLogService.record(
+            action=AuditAction.UPDATE,
+            module=AuditModule.BILLING,
+            obj=refund,
+            user=cancelled_by,
+            metadata={"event": "refund_cancelled", "reason": reason},
+        )
+        return refund
+
+    @classmethod
+    def validate_refund_source(cls, *, refund: StudentRefund):
+        if refund.original_payment_id:
+            if not refund.original_payment.is_advance_payment:
+                raise ValidationError(
+                    "Refund from recognized revenue is blocked: accounting policy for recognized-revenue refund is not configured."
+                )
+        else:
+            # Without original payment reference, only advance-balance-backed refund is allowed.
+            advance = StudentAdvanceBalance.objects.filter(
+                organization=refund.organization,
+                branch=refund.branch,
+                academic_year=refund.academic_year,
+                student=refund.student,
+            ).first()
+            available = advance.balance_amount if advance else ZERO_MONEY
+            if quantize_money(refund.refund_amount) > available:
+                raise ValidationError("Refund requires sufficient advance balance when original payment is not provided.")
+
+    @classmethod
+    def post_refund_journal(cls, *, refund: StudentRefund, posted_by=None):
+        debit = cls._get_account_by_code(organization_id=refund.organization_id, code=cls.STUDENT_ADVANCE_REVENUE_CODE)
+        credit = cls._resolve_refund_cash_bank_account(refund=refund)
+        amount = quantize_money(refund.refund_amount)
+        entry = JournalEntry.objects.create(
+            organization=refund.organization,
+            branch=refund.branch,
+            academic_year=refund.academic_year,
+            entry_number=cls._generate_journal_entry_number(organization_id=refund.organization_id),
+            entry_date_ad=refund.refund_date_ad or timezone.now().date(),
+            entry_date_bs=refund.refund_date_bs or "",
+            description=f"Student refund {refund.refund_voucher_number or refund.id}",
+            source_type=JournalEntry.SourceType.SYSTEM,
+            source_app="billing",
+            source_model="StudentRefund",
+            source_object_id=refund.id,
+            source_number=refund.refund_voucher_number or "",
+            status=JournalEntry.Status.APPROVED,
+            is_system_generated=True,
+            created_by=posted_by,
+            approved_by=refund.approved_by or posted_by,
+        )
+        JournalEntryLine.objects.create(
+            journal_entry=entry,
+            organization=refund.organization,
+            branch=refund.branch,
+            account=debit,
+            debit_amount=amount,
+            credit_amount=ZERO_MONEY,
+            student_id=refund.student_id,
+        )
+        JournalEntryLine.objects.create(
+            journal_entry=entry,
+            organization=refund.organization,
+            branch=refund.branch,
+            account=credit,
+            debit_amount=ZERO_MONEY,
+            credit_amount=amount,
+            student_id=refund.student_id,
+        )
+        return AccountingPostingService.post_journal_entry(entry, posted_by=posted_by)
+
+    @classmethod
+    def _resolve_refund_cash_bank_account(cls, *, refund: StudentRefund) -> Account:
+        original = refund.original_payment
+        if original and original.payment_method == StudentPayment.PaymentMethod.CASH:
+            return cls._get_account_by_code(organization_id=refund.organization_id, code=cls.CASH_ACCOUNT_CODE)
+        if original and original.payment_method == StudentPayment.PaymentMethod.WALLET:
+            return cls._get_account_by_code(organization_id=refund.organization_id, code=cls.WALLET_ACCOUNT_CODE)
+        return cls._get_account_by_code(organization_id=refund.organization_id, code=cls.BANK_ACCOUNT_CODE)

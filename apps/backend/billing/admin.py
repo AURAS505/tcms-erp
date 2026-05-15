@@ -115,12 +115,32 @@ class BillingDiscountAdmin(admin.ModelAdmin):
     list_filter = ("organization", "branch", "academic_year", "discount_type", "status")
     search_fields = ("student__admission_number", "student__full_name", "reason")
 
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status == BillingDiscount.Status.APPROVED:
+            return [field.name for field in self.model._meta.fields]
+        return super().get_readonly_fields(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.status == BillingDiscount.Status.APPROVED:
+            return False
+        return super().has_delete_permission(request, obj)
+
 
 @admin.register(BillingWaiver)
 class BillingWaiverAdmin(admin.ModelAdmin):
     list_display = ("student", "waiver_amount", "status", "approved_by")
     list_filter = ("organization", "branch", "academic_year", "status")
     search_fields = ("student__admission_number", "student__full_name", "reason")
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status == BillingWaiver.Status.APPROVED:
+            return [field.name for field in self.model._meta.fields]
+        return super().get_readonly_fields(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.status == BillingWaiver.Status.APPROVED:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 @admin.register(BillingFine)
@@ -129,9 +149,29 @@ class BillingFineAdmin(admin.ModelAdmin):
     list_filter = ("organization", "branch", "academic_year", "fine_type", "status")
     search_fields = ("student__admission_number", "student__full_name", "reason")
 
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status == BillingFine.Status.APPROVED:
+            return [field.name for field in self.model._meta.fields]
+        return super().get_readonly_fields(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.status == BillingFine.Status.APPROVED:
+            return False
+        return super().has_delete_permission(request, obj)
+
 
 @admin.register(StudentRefund)
 class StudentRefundAdmin(admin.ModelAdmin):
     list_display = ("refund_voucher_number", "student", "refund_date_ad", "refund_amount", "status", "approved_by", "paid_by")
     list_filter = ("organization", "branch", "academic_year", "status")
     search_fields = ("refund_voucher_number", "student__admission_number", "student__full_name", "refund_reason")
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status == StudentRefund.Status.PAID:
+            return [field.name for field in self.model._meta.fields]
+        return super().get_readonly_fields(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.status == StudentRefund.Status.PAID:
+            return False
+        return super().has_delete_permission(request, obj)
