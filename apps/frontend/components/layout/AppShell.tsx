@@ -26,7 +26,9 @@ export function AppShell({ children }: AppShellProps) {
         setStatus("authenticated");
       })
       .catch(() => {
-        if (isMounted) setStatus("guest");
+        if (!isMounted) return;
+        setUser(null);
+        setStatus("guest");
       });
 
     return () => {
@@ -35,7 +37,15 @@ export function AppShell({ children }: AppShellProps) {
   }, []);
 
   if (status === "checking") {
-    return <div className="min-h-screen bg-[#F5F8FB] p-8 text-sm text-slate-600">Checking session...</div>;
+    return (
+      <div
+        aria-live="polite"
+        className="min-h-screen bg-[#F5F8FB] p-8 text-sm text-slate-600"
+        role="status"
+      >
+        Checking session...
+      </div>
+    );
   }
 
   if (status === "guest") {
@@ -67,4 +77,3 @@ export function AppShell({ children }: AppShellProps) {
     </div>
   );
 }
-
