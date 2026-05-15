@@ -50,4 +50,12 @@ Services:
 
 ## Source Document Status
 
-No existing project documents, SOP files, old code archives, or requirements files were found in the workspace before this scaffold was created. The master prompt is currently the source of truth. Add any missing source documents under `docs/requirements/` before implementing business or financial logic.
+No existing project documents, SOP files, old code archives, or requirements files were found in the workspace before this scaffold was created. The master prompt has now been synced into repository documentation:
+
+- `docs/requirements/master-requirements.md`
+- `docs/requirements/nepali-date-academic-year.md`
+- `docs/requirements/clarifications.md`
+- `docs/accounting/financial-workflows.md`
+- `docs/architecture/development-roadmap.md`
+
+Add any additional signed SOPs or legacy documents under `docs/requirements/` before implementing business or financial logic.
