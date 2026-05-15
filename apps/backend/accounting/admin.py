@@ -23,6 +23,16 @@ class JournalEntryAdmin(admin.ModelAdmin):
     search_fields = ["entry_number", "description", "narration", "source_number"]
     inlines = [JournalEntryLineInline]
 
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.is_immutable:
+            return [field.name for field in self.model._meta.fields]
+        return super().get_readonly_fields(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.is_immutable:
+            return False
+        return super().has_delete_permission(request, obj)
+
 
 @admin.register(JournalEntryLine)
 class JournalEntryLineAdmin(admin.ModelAdmin):

@@ -147,6 +147,24 @@ class JournalEntry(BaseModel):
     def is_posted(self) -> bool:
         return self.status == self.Status.POSTED
 
+    @property
+    def is_immutable(self) -> bool:
+        return self.status in {self.Status.POSTED, self.Status.REVERSED, self.Status.VOID}
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            existing_status = type(self).objects.only("status").get(pk=self.pk).status
+            if existing_status in {self.Status.POSTED, self.Status.REVERSED, self.Status.VOID} and not getattr(
+                self, "_allow_immutable_update", False
+            ):
+                raise ValidationError("Posted, reversed, and void journal entries are immutable. Use reversal entries.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.is_immutable:
+            raise ValidationError("Posted, reversed, and void journal entries cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
     def clean(self) -> None:
         super().clean()
         if self.branch_id and self.organization_id != self.branch.organization_id:
@@ -198,6 +216,26 @@ class JournalEntryLine(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.journal_entry.entry_number} - {self.account.code}"
+
+    def save(self, *args, **kwargs):
+        if self.journal_entry_id:
+            entry_status = self.journal_entry.status
+            if entry_status in {
+                JournalEntry.Status.POSTED,
+                JournalEntry.Status.REVERSED,
+                JournalEntry.Status.VOID,
+            } and not getattr(self, "_allow_immutable_update", False):
+                raise ValidationError("Lines for posted, reversed, and void journal entries are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.journal_entry.status in {
+            JournalEntry.Status.POSTED,
+            JournalEntry.Status.REVERSED,
+            JournalEntry.Status.VOID,
+        }:
+            raise ValidationError("Lines for posted, reversed, and void journal entries cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
     def clean(self) -> None:
         super().clean()

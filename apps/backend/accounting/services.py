@@ -6,6 +6,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from academic.models import AcademicPeriod, AcademicYear
+from common.audit import AuditAction, AuditLogService, AuditModule, serialize_model_instance
 
 from .models import JournalEntry
 
@@ -60,4 +61,15 @@ class AccountingPostingService:
         locked_entry.posting_date_ad = now.date()
         locked_entry.posted_by = posted_by
         locked_entry.save(update_fields=["status", "posted_at", "posting_date_ad", "posted_by", "updated_at"])
+        AuditLogService.record_model_change(
+            action=AuditAction.POST,
+            module=AuditModule.ACCOUNTING,
+            instance=locked_entry,
+            user=posted_by,
+            after_data=serialize_model_instance(
+                locked_entry,
+                fields=["entry_number", "status", "posting_date_ad", "posted_at", "posted_by"],
+            ),
+            metadata={"event": "journal_entry_posted"},
+        )
         return locked_entry
