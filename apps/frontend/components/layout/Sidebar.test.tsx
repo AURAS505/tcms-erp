@@ -30,6 +30,8 @@ describe("Sidebar", () => {
       "href",
       "/dashboard/student-inquiries",
     );
+    expect(screen.getByRole("link", { name: "Guardians" })).toHaveAttribute("href", "/dashboard/guardians");
+    expect(screen.getByRole("link", { name: "Families" })).toHaveAttribute("href", "/dashboard/families");
     expect(screen.getByText("Admin User")).toBeInTheDocument();
   });
 

@@ -67,9 +67,14 @@ export default function StudentDetailPage({ params }: { params: { id: string } }
               <DetailItem label="Notes" value={student.notes} />
             </dl>
           </article>
+          <article className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)] lg:col-span-3">
+            <h2 className="text-base font-semibold text-[#262B40]">Guardian relationships</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Guardian and family links will appear here after the student-guardian endpoint supports direct student filtering.
+            </p>
+          </article>
         </section>
       ) : null}
     </div>
   );
 }
-

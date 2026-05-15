@@ -32,6 +32,16 @@ export const navigationItems: NavItem[] = [
     label: "Students",
     roles: allRoles,
   },
+  {
+    href: "/dashboard/guardians",
+    label: "Guardians",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/families",
+    label: "Families",
+    roles: allRoles,
+  },
 ];
 
 export function getNavigationForRoles(roles: Role[]) {

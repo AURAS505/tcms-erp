@@ -5,6 +5,7 @@ const statusStyles: Record<string, string> = {
   contacted: "bg-blue-50 text-blue-700",
   converted: "bg-green-50 text-green-700",
   graduated: "bg-indigo-50 text-indigo-700",
+  inactive: "bg-slate-100 text-slate-700",
   inquiry: "bg-blue-50 text-blue-700",
   left: "bg-orange-50 text-orange-700",
   new: "bg-blue-50 text-blue-700",
@@ -26,4 +27,3 @@ export function StatusBadge({ status }: { status: string }) {
     </span>
   );
 }
-

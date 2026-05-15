@@ -21,5 +21,6 @@ dist/
 Thumbs.db
 
 *.log
+celerybeat-schedule
 postgres-data/
 redis-data/
