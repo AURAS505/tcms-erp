@@ -51,6 +51,13 @@ class AcademicYear(BaseModel):
     def __str__(self) -> str:
         return f"{self.organization.display_name} - {self.name}"
 
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            existing_status = type(self).objects.only("status").get(pk=self.pk).status
+            if existing_status == self.Status.HARD_CLOSED and not getattr(self, "_allow_hard_closed_update", False):
+                raise ValidationError("Hard-closed academic years are read-only.")
+        return super().save(*args, **kwargs)
+
 
 class AcademicPeriod(BaseModel):
     class Status(models.TextChoices):
@@ -93,6 +100,13 @@ class AcademicPeriod(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.academic_year.name} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            existing_status = type(self).objects.only("status").get(pk=self.pk).status
+            if existing_status == self.Status.HARD_CLOSED and not getattr(self, "_allow_hard_closed_update", False):
+                raise ValidationError("Hard-closed academic periods are read-only.")
+        return super().save(*args, **kwargs)
 
     def clean(self) -> None:
         super().clean()
@@ -171,6 +185,22 @@ class AcademicYearRollover(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.organization.display_name}: rollover from {self.from_academic_year.name}"
+
+    @property
+    def is_immutable(self) -> bool:
+        return self.status == self.Status.EXECUTED
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            existing_status = type(self).objects.only("status").get(pk=self.pk).status
+            if existing_status == self.Status.EXECUTED and not getattr(self, "_allow_immutable_update", False):
+                raise ValidationError("Executed academic year rollovers are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.is_immutable:
+            raise ValidationError("Executed academic year rollovers cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
     def clean(self) -> None:
         super().clean()
