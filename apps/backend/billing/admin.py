@@ -67,6 +67,16 @@ class StudentPaymentAllocationInline(admin.TabularInline):
     model = StudentPaymentAllocation
     extra = 0
 
+    def has_change_permission(self, request, obj=None):
+        if obj and obj.status in {StudentPayment.Status.POSTED, StudentPayment.Status.VOIDED, StudentPayment.Status.REFUNDED}:
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.status in {StudentPayment.Status.POSTED, StudentPayment.Status.VOIDED, StudentPayment.Status.REFUNDED}:
+            return False
+        return super().has_delete_permission(request, obj)
+
 
 @admin.register(StudentPayment)
 class StudentPaymentAdmin(admin.ModelAdmin):
@@ -74,6 +84,16 @@ class StudentPaymentAdmin(admin.ModelAdmin):
     list_filter = ("organization", "branch", "academic_year", "payment_method", "status", "is_advance_payment")
     search_fields = ("receipt_number", "draft_receipt_number", "student__admission_number", "student__full_name")
     inlines = [StudentPaymentAllocationInline]
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status in {StudentPayment.Status.POSTED, StudentPayment.Status.VOIDED, StudentPayment.Status.REFUNDED}:
+            return [field.name for field in self.model._meta.fields]
+        return super().get_readonly_fields(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.status in {StudentPayment.Status.POSTED, StudentPayment.Status.VOIDED, StudentPayment.Status.REFUNDED}:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 @admin.register(StudentPaymentAllocation)

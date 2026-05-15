@@ -402,6 +402,24 @@ class StudentPayment(BaseModel):
     def __str__(self) -> str:
         return self.receipt_number or self.draft_receipt_number or f"Payment {self.id}"
 
+    @property
+    def is_immutable(self) -> bool:
+        return self.status in {self.Status.POSTED, self.Status.VOIDED, self.Status.REFUNDED}
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            existing_status = type(self).objects.only("status").get(pk=self.pk).status
+            if existing_status in {self.Status.POSTED, self.Status.VOIDED, self.Status.REFUNDED} and not getattr(
+                self, "_allow_immutable_update", False
+            ):
+                raise ValidationError("Posted, voided, and refunded payments are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.is_immutable:
+            raise ValidationError("Posted, voided, and refunded payments cannot be deleted.")
+        return super().delete(*args, **kwargs)
+
     def clean(self) -> None:
         super().clean()
         validate_billing_scope(self.student, self.organization_id, self.branch, self.academic_year)
@@ -435,6 +453,24 @@ class StudentPaymentAllocation(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.payment} allocation {self.amount_allocated}"
+
+    def save(self, *args, **kwargs):
+        if self.payment_id and self.payment.status in {
+            StudentPayment.Status.POSTED,
+            StudentPayment.Status.VOIDED,
+            StudentPayment.Status.REFUNDED,
+        } and not getattr(self, "_allow_immutable_update", False):
+            raise ValidationError("Allocations for posted, voided, and refunded payments are immutable.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if self.payment.status in {
+            StudentPayment.Status.POSTED,
+            StudentPayment.Status.VOIDED,
+            StudentPayment.Status.REFUNDED,
+        }:
+            raise ValidationError("Allocations for posted, voided, and refunded payments cannot be deleted.")
+        return super().delete(*args, **kwargs)
 
 
 class StudentAdvanceBalance(BaseModel):
