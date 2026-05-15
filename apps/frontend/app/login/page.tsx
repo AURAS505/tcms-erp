@@ -7,7 +7,7 @@ import { z } from "zod";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
-import { authService } from "@/lib/auth";
+import { useAuth } from "@/hooks/useAuth";
 
 const loginSchema = z.object({
   identifier: z.string().min(1, "Email or username is required"),
@@ -16,6 +16,7 @@ const loginSchema = z.object({
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,7 +39,7 @@ export default function LoginPage() {
 
     setIsSubmitting(true);
     try {
-      const user = await authService.login(result.data);
+      const user = await login(result.data);
       router.push(user.forcePasswordChange ? "/force-password-change" : "/dashboard");
       router.refresh();
     } catch (requestError) {
@@ -76,4 +77,3 @@ export default function LoginPage() {
     </AuthCard>
   );
 }
-

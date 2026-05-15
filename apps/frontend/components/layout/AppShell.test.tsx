@@ -2,14 +2,11 @@ import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/layout/AppShell";
-import { authService } from "@/lib/auth";
+import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@/types/auth";
 
-vi.mock("@/lib/auth", () => ({
-  authService: {
-    currentUser: vi.fn(),
-    logout: vi.fn(),
-  },
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -29,12 +26,28 @@ const user: User = {
 };
 
 describe("AppShell", () => {
+  const baseAuth = {
+    branchAssignments: [],
+    error: null,
+    hasPermission: vi.fn(),
+    hasRole: vi.fn(),
+    login: vi.fn(),
+    logout: vi.fn(),
+    permissions: [],
+    refreshSession: vi.fn(),
+  };
+
   beforeEach(() => {
-    vi.mocked(authService.currentUser).mockReset();
+    vi.mocked(useAuth).mockReset();
   });
 
   it("shows checking state before the auth request settles", () => {
-    vi.mocked(authService.currentUser).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(useAuth).mockReturnValue({
+      ...baseAuth,
+      isAuthenticated: false,
+      isLoading: true,
+      user: null,
+    });
 
     render(
       <AppShell>
@@ -47,7 +60,13 @@ describe("AppShell", () => {
   });
 
   it("shows auth-required state when unauthenticated", async () => {
-    vi.mocked(authService.currentUser).mockRejectedValue(new Error("Unauthorized"));
+    vi.mocked(useAuth).mockReturnValue({
+      ...baseAuth,
+      error: new Error("Unauthorized"),
+      isAuthenticated: false,
+      isLoading: false,
+      user: null,
+    });
 
     render(
       <AppShell>
@@ -61,7 +80,12 @@ describe("AppShell", () => {
   });
 
   it("renders children when authenticated", async () => {
-    vi.mocked(authService.currentUser).mockResolvedValue(user);
+    vi.mocked(useAuth).mockReturnValue({
+      ...baseAuth,
+      isAuthenticated: true,
+      isLoading: false,
+      user,
+    });
 
     render(
       <AppShell>

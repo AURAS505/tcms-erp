@@ -2,13 +2,11 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import LoginPage from "@/app/login/page";
-import { authService } from "@/lib/auth";
+import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@/types/auth";
 
-vi.mock("@/lib/auth", () => ({
-  authService: {
-    login: vi.fn(),
-  },
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: vi.fn(),
 }));
 
 const push = vi.fn();
@@ -30,8 +28,23 @@ const user: User = {
 };
 
 describe("LoginPage", () => {
+  const login = vi.fn();
+
   beforeEach(() => {
-    vi.mocked(authService.login).mockReset();
+    login.mockReset();
+    vi.mocked(useAuth).mockReturnValue({
+      branchAssignments: [],
+      error: null,
+      hasPermission: vi.fn(),
+      hasRole: vi.fn(),
+      isAuthenticated: false,
+      isLoading: false,
+      login,
+      logout: vi.fn(),
+      permissions: [],
+      refreshSession: vi.fn(),
+      user: null,
+    });
     push.mockReset();
     refresh.mockReset();
   });
@@ -43,11 +56,11 @@ describe("LoginPage", () => {
 
     expect(await screen.findByText("Email or username is required")).toBeInTheDocument();
     expect(screen.getByText("Password is required")).toBeInTheDocument();
-    expect(authService.login).not.toHaveBeenCalled();
+    expect(login).not.toHaveBeenCalled();
   });
 
   it("redirects to dashboard after successful login", async () => {
-    vi.mocked(authService.login).mockResolvedValue(user);
+    login.mockResolvedValue(user);
     render(<LoginPage />);
 
     fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: "admin@tcms.test" } });
@@ -59,7 +72,7 @@ describe("LoginPage", () => {
   });
 
   it("redirects to force password change when required", async () => {
-    vi.mocked(authService.login).mockResolvedValue({ ...user, forcePasswordChange: true });
+    login.mockResolvedValue({ ...user, forcePasswordChange: true });
     render(<LoginPage />);
 
     fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: "admin@tcms.test" } });

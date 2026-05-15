@@ -1,42 +1,19 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
-import { authService } from "@/lib/auth";
-import type { User } from "@/types/auth";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AppShellProps {
   children: ReactNode;
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [status, setStatus] = useState<"checking" | "authenticated" | "guest">("checking");
+  const { isAuthenticated, isLoading, user } = useAuth();
 
-  useEffect(() => {
-    let isMounted = true;
-
-    authService
-      .currentUser()
-      .then((currentUser) => {
-        if (!isMounted) return;
-        setUser(currentUser);
-        setStatus("authenticated");
-      })
-      .catch(() => {
-        if (!isMounted) return;
-        setUser(null);
-        setStatus("guest");
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  if (status === "checking") {
+  if (isLoading) {
     return (
       <div
         aria-live="polite"
@@ -48,7 +25,7 @@ export function AppShell({ children }: AppShellProps) {
     );
   }
 
-  if (status === "guest") {
+  if (!isAuthenticated) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F5F8FB] px-4">
         <section className="max-w-md rounded-lg bg-white p-7 text-center shadow-[0_2px_18px_rgba(38,43,64,0.08)]">

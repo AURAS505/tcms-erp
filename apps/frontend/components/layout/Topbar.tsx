@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { authService } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@/types/auth";
 
 interface TopbarProps {
@@ -12,12 +12,13 @@ interface TopbarProps {
 
 export function Topbar({ user }: TopbarProps) {
   const router = useRouter();
+  const { logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
-      await authService.logout();
+      await logout();
     } finally {
       router.push("/login");
       router.refresh();
