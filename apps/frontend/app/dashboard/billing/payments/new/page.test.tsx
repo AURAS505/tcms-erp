@@ -51,9 +51,17 @@ async function fillRequiredPaymentFields() {
 async function selectDueAllocation(amount = "500.00") {
   await waitFor(() => expect(listFeeDues).toHaveBeenCalled());
   await screen.findByRole("option", { name: /Due: Baishakh 2083 \(2026-04-30\) - balance 1000.00/i });
-  fireEvent.change(screen.getByLabelText(/allocation target/i), { target: { value: "due:due-1" } });
-  await waitFor(() => expect(screen.getByLabelText(/allocation amount/i)).not.toBeDisabled());
-  fireEvent.change(screen.getByLabelText(/allocation amount/i), { target: { value: amount } });
+  fireEvent.change(screen.getByLabelText(/allocation target 1/i), { target: { value: "due:due-1" } });
+  await waitFor(() => expect(screen.getByLabelText(/allocation amount 1/i)).not.toBeDisabled());
+  fireEvent.change(screen.getByLabelText(/allocation amount 1/i), { target: { value: amount } });
+}
+
+async function addInvoiceAllocation(amount = "250.00") {
+  fireEvent.click(screen.getByRole("button", { name: /add allocation/i }));
+  await screen.findByLabelText(/allocation target 2/i);
+  fireEvent.change(screen.getByLabelText(/allocation target 2/i), { target: { value: "invoice:invoice-1" } });
+  await waitFor(() => expect(screen.getByLabelText(/allocation amount 2/i)).not.toBeDisabled());
+  fireEvent.change(screen.getByLabelText(/allocation amount 2/i), { target: { value: amount } });
 }
 
 describe("NewPaymentPage", () => {
@@ -178,7 +186,7 @@ describe("NewPaymentPage", () => {
     expect(await screen.findByRole("heading", { name: "New Payment" })).toBeInTheDocument();
     expect(screen.getByLabelText(/payment date/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^amount$/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/allocation target/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/allocation target 1/i)).toBeInTheDocument();
   });
 
   it("hides allocation picker for advance payments", async () => {
@@ -186,7 +194,7 @@ describe("NewPaymentPage", () => {
 
     fireEvent.click(await screen.findByLabelText(/advance payment/i));
 
-    expect(screen.queryByLabelText(/allocation target/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/allocation target 1/i)).not.toBeInTheDocument();
     expect(screen.getByText(/advance payments do not use due or invoice allocations/i)).toBeInTheDocument();
   });
 
@@ -204,6 +212,46 @@ describe("NewPaymentPage", () => {
     );
     expect(screen.getByText(/Selected balance:/i)).toBeInTheDocument();
     expect(screen.getAllByText(/1000.00/i).length).toBeGreaterThan(0);
+  });
+
+  it("adds and removes allocation rows", async () => {
+    renderPage();
+
+    await fillRequiredPaymentFields();
+    await selectDueAllocation("250.00");
+    fireEvent.click(screen.getByRole("button", { name: /add allocation/i }));
+
+    expect(await screen.findByLabelText(/allocation target 2/i)).toBeInTheDocument();
+
+    const removeButtons = screen.getAllByRole("button", { name: /remove/i });
+    fireEvent.click(removeButtons[1]);
+
+    await waitFor(() => expect(screen.queryByLabelText(/allocation target 2/i)).not.toBeInTheDocument());
+  });
+
+  it("flags duplicate allocation targets", async () => {
+    renderPage();
+
+    await fillRequiredPaymentFields();
+    await selectDueAllocation("250.00");
+    fireEvent.click(screen.getByRole("button", { name: /add allocation/i }));
+    fireEvent.change(await screen.findByLabelText(/allocation target 2/i), { target: { value: "due:due-1" } });
+    fireEvent.change(screen.getByLabelText(/allocation amount 2/i), { target: { value: "250.00" } });
+
+    expect((await screen.findAllByText(/duplicates another allocation target/i)).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /create draft/i })).toBeDisabled();
+  });
+
+  it("shows allocation total and blocks totals above payment amount", async () => {
+    renderPage();
+
+    await fillRequiredPaymentFields();
+    await selectDueAllocation("400.00");
+    await addInvoiceAllocation("200.00");
+
+    expect(screen.getByText(/allocation total:/i)).toBeInTheDocument();
+    expect(screen.getByText(/allocation total cannot exceed payment amount/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /create draft/i })).toBeDisabled();
   });
 
   it("shows an empty state when selected student has no backend open obligations", async () => {
@@ -228,15 +276,14 @@ describe("NewPaymentPage", () => {
     renderPage();
 
     await fillRequiredPaymentFields();
-    fireEvent.change(screen.getByLabelText(/^amount$/i), { target: { value: "1500.00" } });
     await selectDueAllocation("1500.00");
     fireEvent.click(screen.getByRole("button", { name: /create draft/i }));
 
-    expect(await screen.findByText(/allocation amount cannot exceed the selected balance/i)).toBeInTheDocument();
+    expect(await screen.findByText(/allocation row 1 amount cannot exceed the selected balance/i)).toBeInTheDocument();
     expect(createDraftStudentPayment).not.toHaveBeenCalled();
   });
 
-  it("creates draft payment with selected due allocation and redirects to detail page", async () => {
+  it("creates draft payment with multiple allocations and redirects to detail page", async () => {
     vi.mocked(createDraftStudentPayment).mockResolvedValue({
       id: "payment-1",
       organization: "org-1",
@@ -270,14 +317,18 @@ describe("NewPaymentPage", () => {
     renderPage();
 
     await fillRequiredPaymentFields();
-    await selectDueAllocation();
+    await selectDueAllocation("300.00");
+    await addInvoiceAllocation("200.00");
     fireEvent.click(screen.getByRole("button", { name: /create draft/i }));
 
     await waitFor(() => expect(createDraftStudentPayment).toHaveBeenCalled());
     expect(vi.mocked(createDraftStudentPayment).mock.calls[0][0]).toEqual(
       expect.objectContaining({
         amount: "500.00",
-        allocations: [{ fee_due: "due-1", amount_allocated: "500.00" }],
+        allocations: [
+          { fee_due: "due-1", amount_allocated: "300.00" },
+          { invoice: "invoice-1", amount_allocated: "200.00" },
+        ],
         is_advance_payment: false,
         organization: "org-1",
         student: "student-1",

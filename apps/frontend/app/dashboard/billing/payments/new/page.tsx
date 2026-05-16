@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { TextInput } from "@/components/ui/TextInput";
 import { createDraftStudentPayment, listFeeDues, listInvoices } from "@/lib/billing";
@@ -20,6 +21,16 @@ type AllocationOption =
   | { kind: "due"; id: string; label: string; balance: number; status: string; source: StudentFeeDue }
   | { kind: "invoice"; id: string; label: string; balance: number; status: string; source: StudentInvoice };
 
+interface AllocationRow {
+  id: string;
+  target: string;
+  amount: string;
+}
+
+function newAllocationRow(): AllocationRow {
+  return { id: `${Date.now()}-${Math.random()}`, target: "", amount: "" };
+}
+
 function isQueryLoading(...states: { isLoading: boolean }[]) {
   return states.some((state) => state.isLoading);
 }
@@ -32,8 +43,8 @@ export default function NewPaymentPage() {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedAcademicYear, setSelectedAcademicYear] = useState("");
   const [selectedStudent, setSelectedStudent] = useState("");
-  const [selectedAllocationTarget, setSelectedAllocationTarget] = useState("");
-  const [allocationAmount, setAllocationAmount] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [allocationRows, setAllocationRows] = useState<AllocationRow[]>([newAllocationRow()]);
   const [allocationSearch, setAllocationSearch] = useState("");
 
   const organizations = useQuery({ queryKey: ["payment-form-organizations"], queryFn: listOrganizations });
@@ -96,7 +107,44 @@ export default function NewPaymentPage() {
     return allAllocationOptions.filter((option) => `${option.label} ${option.status}`.toLowerCase().includes(normalizedSearch));
   }, [allAllocationOptions, allocationSearch]);
 
-  const selectedAllocation = allAllocationOptions.find((option) => `${option.kind}:${option.id}` === selectedAllocationTarget);
+  const selectedTargets = allocationRows.map((row) => row.target).filter(Boolean);
+  const duplicateTargets = new Set(selectedTargets.filter((target, index) => selectedTargets.indexOf(target) !== index));
+  const allocationTotal = allocationRows.reduce((total, row) => total + (Number(row.amount) || 0), 0);
+  const paymentAmountNumber = Number(paymentAmount) || 0;
+  const unallocatedAmount = paymentAmountNumber - allocationTotal;
+  const allocationValidationMessages = allocationRows.flatMap((row, index) => {
+    if (!row.target && !row.amount) return [];
+    const selectedAllocation = allAllocationOptions.find((option) => `${option.kind}:${option.id}` === row.target);
+    const parsedAmount = Number(row.amount);
+    const messages: string[] = [];
+    if (!row.target) messages.push(`Allocation row ${index + 1} needs a due or invoice.`);
+    if (!row.amount || parsedAmount <= 0) messages.push(`Allocation row ${index + 1} amount must be greater than zero.`);
+    if (row.target && duplicateTargets.has(row.target)) messages.push(`Allocation row ${index + 1} duplicates another allocation target.`);
+    if (selectedAllocation && parsedAmount > selectedAllocation.balance) {
+      messages.push(`Allocation row ${index + 1} amount cannot exceed the selected balance.`);
+    }
+    return messages;
+  });
+  if (!isAdvancePayment && allocationTotal > paymentAmountNumber) {
+    allocationValidationMessages.push("Allocation total cannot exceed payment amount.");
+  }
+  const hasAllocationValidationError = !isAdvancePayment && allocationValidationMessages.length > 0;
+
+  function resetAllocations() {
+    setAllocationRows([newAllocationRow()]);
+    setAllocationSearch("");
+  }
+
+  function updateAllocationRow(rowId: string, patch: Partial<AllocationRow>) {
+    setAllocationRows((rows) => rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
+  }
+
+  function removeAllocationRow(rowId: string) {
+    setAllocationRows((rows) => {
+      const nextRows = rows.filter((row) => row.id !== rowId);
+      return nextRows.length ? nextRows : [newAllocationRow()];
+    });
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -105,25 +153,22 @@ export default function NewPaymentPage() {
     const amount = String(formData.get("amount") ?? "").trim();
 
     const allocations: StudentPaymentAllocationInput[] = [];
-    if (!isAdvancePayment && selectedAllocationTarget) {
-      const parsedAllocationAmount = Number(allocationAmount);
-      if (!allocationAmount || parsedAllocationAmount <= 0) {
-        setErrorMessage("Allocation amount must be greater than zero.");
+    if (!isAdvancePayment) {
+      if (hasAllocationValidationError) {
+        setErrorMessage(allocationValidationMessages[0]);
         return;
       }
-      if (!selectedAllocation) {
-        setErrorMessage("Select a valid due or invoice allocation target.");
-        return;
-      }
-      if (parsedAllocationAmount > selectedAllocation.balance) {
-        setErrorMessage("Allocation amount cannot exceed the selected balance.");
-        return;
-      }
-      allocations.push(
-        selectedAllocation.kind === "due"
-          ? { fee_due: selectedAllocation.id, amount_allocated: allocationAmount }
-          : { invoice: selectedAllocation.id, amount_allocated: allocationAmount },
-      );
+      allocationRows
+        .filter((row) => row.target && row.amount)
+        .forEach((row) => {
+          const selectedAllocation = allAllocationOptions.find((option) => `${option.kind}:${option.id}` === row.target);
+          if (!selectedAllocation) return;
+          allocations.push(
+            selectedAllocation.kind === "due"
+              ? { fee_due: selectedAllocation.id, amount_allocated: row.amount }
+              : { invoice: selectedAllocation.id, amount_allocated: row.amount },
+          );
+        });
     }
 
     const payload: StudentPaymentDraftCreateInput = {
@@ -230,9 +275,7 @@ export default function NewPaymentPage() {
               name="student"
               onChange={(event) => {
                 setSelectedStudent(event.target.value);
-                setSelectedAllocationTarget("");
-                setAllocationAmount("");
-                setAllocationSearch("");
+                resetAllocations();
               }}
               required
               value={selectedStudent}
@@ -256,7 +299,7 @@ export default function NewPaymentPage() {
               ))}
             </select>
           </label>
-          <TextInput label="Amount" min="0.01" name="amount" required step="0.01" type="number" />
+          <TextInput label="Amount" min="0.01" name="amount" onChange={(event) => setPaymentAmount(event.target.value)} required step="0.01" type="number" value={paymentAmount} />
           <TextInput label="Reference number" name="reference_number" />
         </div>
 
@@ -267,9 +310,10 @@ export default function NewPaymentPage() {
             onChange={(event) => {
               setIsAdvancePayment(event.target.checked);
               if (event.target.checked) {
-                setSelectedAllocationTarget("");
-                setAllocationAmount("");
+                setAllocationRows([]);
                 setAllocationSearch("");
+              } else if (!allocationRows.length) {
+                setAllocationRows([newAllocationRow()]);
               }
             }}
             type="checkbox"
@@ -279,11 +323,11 @@ export default function NewPaymentPage() {
 
         <div className="rounded-lg border border-slate-200 p-4">
           <h2 className="text-sm font-semibold text-[#262B40]">Optional due or invoice allocation</h2>
-          <p className="mt-1 text-sm text-slate-500">Select an open due or invoice for this student. Backend validation still controls final allocation.</p>
+          <p className="mt-1 text-sm text-slate-500">Allocate this payment across one or more open dues or invoices. Backend validation still controls final allocation.</p>
           {isAdvancePayment ? (
             <p className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">Advance payments do not use due or invoice allocations.</p>
           ) : (
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="mt-4 space-y-4">
               <TextInput
                 disabled={!selectedStudent || loadingAllocations}
                 label="Search dues/invoices"
@@ -291,49 +335,88 @@ export default function NewPaymentPage() {
                 onChange={(event) => setAllocationSearch(event.target.value)}
                 value={allocationSearch}
               />
-              <label className="block text-sm font-medium text-slate-700">
-                Allocation target
-                <select
-                  className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={!selectedStudent || loadingAllocations}
-                  name="allocation_target"
-                  onChange={(event) => {
-                    setSelectedAllocationTarget(event.target.value);
-                    setAllocationAmount("");
-                  }}
-                  value={selectedAllocationTarget}
-                >
-                  <option value="">{selectedStudent ? "Select due or invoice" : "Select student first"}</option>
-                  {allocationOptions.map((option) => (
-                    <option key={`${option.kind}:${option.id}`} value={`${option.kind}:${option.id}`}>
-                      {option.label} - balance {option.balance.toFixed(2)}
-                    </option>
+
+              {allocationRows.map((row, index) => {
+                const selectedAllocation = allAllocationOptions.find((option) => `${option.kind}:${option.id}` === row.target);
+                return (
+                  <div className="grid gap-3 rounded-md border border-slate-200 p-3 md:grid-cols-[1fr_180px_auto]" key={row.id}>
+                    <label className="block text-sm font-medium text-slate-700">
+                      Allocation target {index + 1}
+                      <select
+                        className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={!selectedStudent || loadingAllocations}
+                        name={`allocation_target_${index + 1}`}
+                        onChange={(event) => updateAllocationRow(row.id, { target: event.target.value, amount: "" })}
+                        value={row.target}
+                      >
+                        <option value="">{selectedStudent ? "Select due or invoice" : "Select student first"}</option>
+                        {allocationOptions.map((option) => {
+                          const value = `${option.kind}:${option.id}`;
+                          const disabled = Boolean(value !== row.target && selectedTargets.includes(value));
+                          return (
+                            <option disabled={disabled} key={value} value={value}>
+                              {option.label} - balance {option.balance.toFixed(2)}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                    <TextInput
+                      disabled={!selectedAllocation}
+                      label={`Allocation amount ${index + 1}`}
+                      min="0.01"
+                      name={`allocation_amount_${index + 1}`}
+                      onChange={(event) => updateAllocationRow(row.id, { amount: event.target.value })}
+                      step="0.01"
+                      type="number"
+                      value={row.amount}
+                    />
+                    <div className="flex items-end">
+                      <Button disabled={allocationRows.length === 1 && !row.target && !row.amount} onClick={() => removeAllocationRow(row.id)} type="button" variant="secondary">
+                        Remove
+                      </Button>
+                    </div>
+                    {selectedAllocation ? (
+                      <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 md:col-span-3">
+                        <span className="font-semibold text-slate-700">Selected balance:</span> {selectedAllocation.balance.toFixed(2)}
+                        <span className="mx-2 text-slate-300">|</span>
+                        <span className="font-semibold text-slate-700">Status:</span> {selectedAllocation.status}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+
+              <Button disabled={!selectedStudent || loadingAllocations || allocationOptions.length === 0} onClick={() => setAllocationRows((rows) => [...rows, newAllocationRow()])} type="button" variant="secondary">
+                Add allocation
+              </Button>
+
+              <div className="grid gap-2 rounded-md bg-slate-50 px-3 py-3 text-sm text-slate-700 md:grid-cols-3">
+                <span>
+                  <span className="font-semibold">Allocation total:</span> <MoneyDisplay amount={allocationTotal} />
+                </span>
+                <span>
+                  <span className="font-semibold">Unallocated amount:</span> <MoneyDisplay amount={unallocatedAmount} />
+                </span>
+                <span>
+                  <span className="font-semibold">Payment amount:</span> <MoneyDisplay amount={paymentAmountNumber} />
+                </span>
+              </div>
+
+              {allocationValidationMessages.length ? (
+                <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {allocationValidationMessages.map((message) => (
+                    <p key={message}>{message}</p>
                   ))}
-                </select>
-              </label>
-              <TextInput
-                disabled={!selectedAllocation}
-                label="Allocation amount"
-                min="0.01"
-                name="allocation_amount"
-                onChange={(event) => setAllocationAmount(event.target.value)}
-                step="0.01"
-                type="number"
-                value={allocationAmount}
-              />
-              {loadingAllocations ? <p className="text-sm text-slate-500 md:col-span-2">Loading open dues and invoices...</p> : null}
+                </div>
+              ) : null}
+
+              {loadingAllocations ? <p className="text-sm text-slate-500">Loading open dues and invoices...</p> : null}
               {allocationError ? (
-                <p className="text-sm text-red-700 md:col-span-2">{allocationError instanceof Error ? allocationError.message : "Unable to load allocation targets."}</p>
+                <p className="text-sm text-red-700">{allocationError instanceof Error ? allocationError.message : "Unable to load allocation targets."}</p>
               ) : null}
               {selectedStudent && !loadingAllocations && !allocationError && allocationOptions.length === 0 ? (
-                <p className="text-sm text-slate-500 md:col-span-2">No open dues or invoices were found for this student.</p>
-              ) : null}
-              {selectedAllocation ? (
-                <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 md:col-span-2">
-                  <span className="font-semibold text-slate-700">Selected balance:</span> {selectedAllocation.balance.toFixed(2)}
-                  <span className="mx-2 text-slate-300">|</span>
-                  <span className="font-semibold text-slate-700">Status:</span> {selectedAllocation.status}
-                </div>
+                <p className="text-sm text-slate-500">No open dues or invoices were found for this student.</p>
               ) : null}
             </div>
           )}
@@ -345,7 +428,7 @@ export default function NewPaymentPage() {
         </label>
 
         <div className="flex justify-end gap-2">
-          <Button isLoading={createMutation.isPending} type="submit">
+          <Button disabled={hasAllocationValidationError} isLoading={createMutation.isPending} type="submit">
             Create draft
           </Button>
         </div>
