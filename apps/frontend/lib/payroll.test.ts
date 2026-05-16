@@ -142,8 +142,11 @@ describe("payroll API client", () => {
       teacher: "teacher-1",
       payment_date_ad: "2026-04-16",
       payment_method: "cash",
-      amount: "500.00",
-      allocations: [{ teacher_earning: "earning-1", amount_allocated: "500.00" }],
+      amount: "750.00",
+      allocations: [
+        { teacher_earning: "earning-1", amount_allocated: "500.00" },
+        { teacher_earning: "earning-2", amount_allocated: "250.00" },
+      ],
     });
     await approveTeacherPayment("payment-1");
     await postTeacherPayment("payment-1");
@@ -167,7 +170,7 @@ describe("payroll API client", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       "http://localhost:8000/api/v1/teacher-payments/create-draft/",
-      expect.objectContaining({ method: "POST", body: expect.stringContaining('"teacher_earning":"earning-1"') }),
+      expect.objectContaining({ method: "POST", body: expect.stringContaining('"teacher_earning":"earning-2"') }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,

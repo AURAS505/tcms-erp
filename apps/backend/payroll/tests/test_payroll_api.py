@@ -8,8 +8,9 @@ from rest_framework.test import APIClient
 from academic.models import AcademicYear
 from accounts.models import Role, UserBranchAssignment, UserRole
 from accounting.models import Account, JournalEntry
+from common.models import AuditLog
 from organizations.models import Branch, Organization
-from payroll.models import TeacherEarning, TeacherPayment
+from payroll.models import TeacherEarning, TeacherPayment, TeacherPaymentAllocation
 from payroll.services import TeacherEarningService, TeacherPaymentAllocationInput, TeacherPaymentService
 from teachers.models import Teacher
 
@@ -128,6 +129,27 @@ def posted_earning(organization, branch, academic_year, teacher):
         paid_amount=Decimal("0.00"),
         balance_amount=Decimal("1000.00"),
         status=TeacherEarning.Status.POSTED,
+    )
+
+
+def posted_earning_with_balance(organization, branch, academic_year, teacher, *, net_amount, paid_amount="0.00", period_label=""):
+    net = Decimal(net_amount)
+    paid = Decimal(paid_amount)
+    balance = net - paid
+    return TeacherEarning.objects.create(
+        organization=organization,
+        branch=branch,
+        academic_year=academic_year,
+        teacher=teacher,
+        earning_source=TeacherEarning.EarningSource.MANUAL_ADJUSTMENT,
+        earning_date_ad=date(2024, 7, 20),
+        period_label=period_label,
+        gross_amount=net,
+        deduction_amount=Decimal("0.00"),
+        net_amount=net,
+        paid_amount=paid,
+        balance_amount=balance,
+        status=TeacherEarning.Status.POSTED if paid == Decimal("0.00") else TeacherEarning.Status.PARTIAL,
     )
 
 
@@ -251,6 +273,222 @@ def test_teacher_payment_draft_and_approval_posting_create_payment_journal(
     assert approve_response.json()["data"]["status"] == TeacherPayment.Status.POSTED
     assert debit_line.account.code == "2110"
     assert credit_line.account.code == "1110"
+
+
+@pytest.mark.django_db
+def test_teacher_payment_create_draft_api_accepts_multiple_allocations_without_journal(
+    organization, branch, academic_year, teacher, accounts
+):
+    maker = user_with_role(Role.RoleCode.ACCOUNTANT, branch=branch, email_prefix="multi-draft-maker")
+    first_earning = posted_earning_with_balance(
+        organization,
+        branch,
+        academic_year,
+        teacher,
+        net_amount="1000.00",
+        period_label="Shrawan 2081",
+    )
+    second_earning = posted_earning_with_balance(
+        organization,
+        branch,
+        academic_year,
+        teacher,
+        net_amount="800.00",
+        paid_amount="300.00",
+        period_label="Bhadra 2081",
+    )
+
+    response = client_for(maker).post(
+        "/api/v1/teacher-payments/create-draft/",
+        {
+            "organization": str(organization.id),
+            "branch": str(branch.id),
+            "academic_year": str(academic_year.id),
+            "teacher": str(teacher.id),
+            "payment_date_ad": "2024-07-22",
+            "payment_method": TeacherPayment.PaymentMethod.CASH,
+            "amount": "750.00",
+            "allocations": [
+                {"teacher_earning": str(first_earning.id), "amount_allocated": "500.00"},
+                {"teacher_earning": str(second_earning.id), "amount_allocated": "250.00"},
+            ],
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["data"]["status"] == TeacherPayment.Status.DRAFT
+
+    payment = TeacherPayment.objects.get(id=response.json()["data"]["id"])
+    assert payment.allocations.count() == 2
+    assert TeacherPaymentAllocation.objects.filter(teacher_payment=payment, amount_allocated=Decimal("500.00")).exists()
+    assert TeacherPaymentAllocation.objects.filter(teacher_payment=payment, amount_allocated=Decimal("250.00")).exists()
+    assert JournalEntry.objects.filter(source_model="TeacherPayment", source_object_id=payment.id).count() == 0
+
+    first_earning.refresh_from_db()
+    second_earning.refresh_from_db()
+    assert first_earning.paid_amount == Decimal("0.00")
+    assert first_earning.balance_amount == Decimal("1000.00")
+    assert second_earning.paid_amount == Decimal("300.00")
+    assert second_earning.balance_amount == Decimal("500.00")
+
+
+@pytest.mark.django_db
+def test_teacher_payment_multi_allocation_approval_posts_balances_and_journal(
+    organization, branch, academic_year, teacher, accounts
+):
+    maker = user_with_role(Role.RoleCode.ACCOUNTANT, branch=branch, email_prefix="multi-post-maker")
+    checker = user_with_role(Role.RoleCode.ACCOUNTANT, branch=branch, email_prefix="multi-post-checker")
+    first_earning = posted_earning_with_balance(
+        organization,
+        branch,
+        academic_year,
+        teacher,
+        net_amount="1000.00",
+        period_label="Shrawan 2081",
+    )
+    second_earning = posted_earning_with_balance(
+        organization,
+        branch,
+        academic_year,
+        teacher,
+        net_amount="800.00",
+        period_label="Bhadra 2081",
+    )
+    draft_response = client_for(maker).post(
+        "/api/v1/teacher-payments/create-draft/",
+        {
+            "organization": str(organization.id),
+            "branch": str(branch.id),
+            "academic_year": str(academic_year.id),
+            "teacher": str(teacher.id),
+            "payment_date_ad": "2024-07-22",
+            "payment_method": TeacherPayment.PaymentMethod.BANK,
+            "amount": "1250.00",
+            "allocations": [
+                {"teacher_earning": str(first_earning.id), "amount_allocated": "1000.00"},
+                {"teacher_earning": str(second_earning.id), "amount_allocated": "250.00"},
+            ],
+        },
+        format="json",
+    )
+    payment_id = draft_response.json()["data"]["id"]
+
+    approve_response = client_for(checker).post(f"/api/v1/teacher-payments/{payment_id}/approve/", {}, format="json")
+
+    payment = TeacherPayment.objects.get(id=payment_id)
+    first_earning.refresh_from_db()
+    second_earning.refresh_from_db()
+    entry = JournalEntry.objects.get(source_model="TeacherPayment", source_object_id=payment_id)
+    debit_line = entry.lines.get(debit_amount=Decimal("1250.00"))
+    credit_line = entry.lines.get(credit_amount=Decimal("1250.00"))
+
+    assert draft_response.status_code == 201
+    assert approve_response.status_code == 200
+    assert payment.status == TeacherPayment.Status.POSTED
+    assert payment.voucher_number.startswith("TV-")
+    assert first_earning.paid_amount == Decimal("1000.00")
+    assert first_earning.balance_amount == Decimal("0.00")
+    assert first_earning.status == TeacherEarning.Status.PAID
+    assert second_earning.paid_amount == Decimal("250.00")
+    assert second_earning.balance_amount == Decimal("550.00")
+    assert second_earning.status == TeacherEarning.Status.PARTIAL
+    assert entry.status == JournalEntry.Status.POSTED
+    assert debit_line.account.code == "2110"
+    assert credit_line.account.code == "1120"
+    assert AuditLog.objects.filter(
+        module=AuditLog.Module.PAYROLL,
+        action=AuditLog.Action.POST,
+        metadata__event="teacher_payment_posted",
+        object_id=str(payment_id),
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_teacher_payment_api_rejects_allocation_total_above_payment_amount(
+    organization, branch, academic_year, teacher, accounts
+):
+    maker = user_with_role(Role.RoleCode.ACCOUNTANT, branch=branch, email_prefix="multi-total-maker")
+    first_earning = posted_earning_with_balance(organization, branch, academic_year, teacher, net_amount="1000.00")
+    second_earning = posted_earning_with_balance(organization, branch, academic_year, teacher, net_amount="800.00")
+
+    response = client_for(maker).post(
+        "/api/v1/teacher-payments/create-draft/",
+        {
+            **payment_payload(organization, branch, academic_year, teacher, first_earning, amount="500.00"),
+            "allocations": [
+                {"teacher_earning": str(first_earning.id), "amount_allocated": "300.00"},
+                {"teacher_earning": str(second_earning.id), "amount_allocated": "250.00"},
+            ],
+        },
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert "total allocation" in str(response.json()["errors"]).lower()
+
+
+@pytest.mark.django_db
+def test_teacher_payment_api_rejects_allocation_above_earning_balance(
+    organization, branch, academic_year, teacher, accounts
+):
+    maker = user_with_role(Role.RoleCode.ACCOUNTANT, branch=branch, email_prefix="multi-balance-maker")
+    earning = posted_earning_with_balance(
+        organization,
+        branch,
+        academic_year,
+        teacher,
+        net_amount="1000.00",
+        paid_amount="600.00",
+    )
+
+    response = client_for(maker).post(
+        "/api/v1/teacher-payments/create-draft/",
+        payment_payload(organization, branch, academic_year, teacher, earning, amount="500.00"),
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert "earning balance" in str(response.json()["errors"]).lower()
+
+
+@pytest.mark.django_db
+def test_teacher_payment_api_rejects_other_branch_earning_allocation(organization, branch, academic_year, teacher, accounts):
+    maker = user_with_role(Role.RoleCode.ACCOUNTANT, branch=branch, email_prefix="multi-branch-maker")
+    other_branch = Branch.objects.create(organization=organization, code="OTHER", name="Other Branch")
+    other_teacher = Teacher.objects.create(
+        organization=organization,
+        branch=other_branch,
+        employee_number="T-OTHER",
+        full_name="Other Sir",
+        phone="9800000009",
+        status=Teacher.Status.ACTIVE,
+    )
+    other_branch_earning = posted_earning_with_balance(
+        organization,
+        other_branch,
+        academic_year,
+        other_teacher,
+        net_amount="1000.00",
+    )
+
+    response = client_for(maker).post(
+        "/api/v1/teacher-payments/create-draft/",
+        {
+            "organization": str(organization.id),
+            "branch": str(branch.id),
+            "academic_year": str(academic_year.id),
+            "teacher": str(teacher.id),
+            "payment_date_ad": "2024-07-22",
+            "payment_method": TeacherPayment.PaymentMethod.CASH,
+            "amount": "400.00",
+            "allocations": [{"teacher_earning": str(other_branch_earning.id), "amount_allocated": "400.00"}],
+        },
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert "same organization, branch, and teacher" in str(response.json()["errors"]).lower()
 
 
 @pytest.mark.django_db
