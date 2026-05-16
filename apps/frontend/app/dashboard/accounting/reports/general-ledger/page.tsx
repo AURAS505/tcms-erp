@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ReportFilters } from "@/components/reports/ReportFilters";
 import { SimpleTable, type SimpleTableColumn } from "@/components/ui/SimpleTable";
 import { getGeneralLedger } from "@/lib/accounting";
 import type { AccountLedger, AccountingReportFilters } from "@/types/accounting";
@@ -45,11 +46,12 @@ export default function GeneralLedgerPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        description="Read-only general ledger. Add ?organization=<id> and optional account/date filters to load a report."
+        description="Read-only general ledger. Select organization and optional filters to load posted ledger balances."
         title="General Ledger"
       />
+      <ReportFilters showAcademicPeriod />
 
-      {!hasOrganization ? <EmptyState message="Provide an organization query parameter to load this report." title="Report filters required" /> : null}
+      {!hasOrganization ? <EmptyState message="Select an organization to load this report." title="Report filters required" /> : null}
       {isLoading ? <LoadingState label="Loading general ledger..." /> : null}
       {error ? <ErrorState message={error instanceof Error ? error.message : undefined} /> : null}
       {data && data.length === 0 ? <EmptyState message="No ledger balances matched the selected filters." title="No ledger data" /> : null}

@@ -4,10 +4,13 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import TrialBalancePage from "@/app/dashboard/accounting/reports/trial-balance/page";
 import { getTrialBalance } from "@/lib/accounting";
+import { listAcademicPeriods, listAcademicYears, listBranches, listOrganizations } from "@/lib/lookups";
 
 let organization: string | null = null;
 
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard/accounting/reports/trial-balance",
+  useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => ({
     get: (key: string) => (key === "organization" ? organization : null),
   }),
@@ -15,6 +18,13 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/accounting", () => ({
   getTrialBalance: vi.fn(),
+}));
+
+vi.mock("@/lib/lookups", () => ({
+  listOrganizations: vi.fn(),
+  listBranches: vi.fn(),
+  listAcademicYears: vi.fn(),
+  listAcademicPeriods: vi.fn(),
 }));
 
 function renderPage() {
@@ -30,6 +40,22 @@ describe("TrialBalancePage", () => {
   beforeEach(() => {
     organization = null;
     vi.mocked(getTrialBalance).mockReset();
+    vi.mocked(listOrganizations).mockResolvedValue({
+      data: [{ id: "org-1", display_name: "TCMS", legal_name: "TCMS Pvt Ltd", is_active: true }],
+      pagination: { count: 1, page: 1, page_size: 25, next: null, previous: null },
+    });
+    vi.mocked(listBranches).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
+    vi.mocked(listAcademicYears).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
+    vi.mocked(listAcademicPeriods).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
   });
 
   it("renders filter-required state without organization", () => {
@@ -62,6 +88,7 @@ describe("TrialBalancePage", () => {
     renderPage();
 
     expect(await screen.findByText("1110 - Cash")).toBeInTheDocument();
+    expect(getTrialBalance).toHaveBeenCalledWith(expect.objectContaining({ organization: "org-1" }));
     expect(screen.getByText("Balanced")).toBeInTheDocument();
   });
 });

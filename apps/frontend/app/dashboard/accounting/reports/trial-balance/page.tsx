@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ReportFilters } from "@/components/reports/ReportFilters";
 import { SimpleTable, type SimpleTableColumn } from "@/components/ui/SimpleTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { getTrialBalance } from "@/lib/accounting";
@@ -44,11 +45,12 @@ export default function TrialBalancePage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        description="Read-only trial balance. Add ?organization=<id> and optional date filters to load a report."
+        description="Read-only trial balance. Select organization and optional filters to load posted balances."
         title="Trial Balance"
       />
+      <ReportFilters showAcademicPeriod />
 
-      {!hasOrganization ? <EmptyState message="Provide an organization query parameter to load this report." title="Report filters required" /> : null}
+      {!hasOrganization ? <EmptyState message="Select an organization to load this report." title="Report filters required" /> : null}
       {isLoading ? <LoadingState label="Loading trial balance..." /> : null}
       {error ? <ErrorState message={error instanceof Error ? error.message : undefined} /> : null}
       {data ? (

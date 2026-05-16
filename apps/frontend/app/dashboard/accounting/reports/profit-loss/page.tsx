@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { ReportFilters } from "@/components/reports/ReportFilters";
 import { getProfitLoss } from "@/lib/accounting";
 import type { AccountingReportFilters, ProfitLossReport } from "@/types/accounting";
 
@@ -44,11 +45,12 @@ export default function ProfitLossPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        description="Read-only profit and loss summary. Add ?organization=<id> and optional date filters to load a report."
+        description="Read-only profit and loss summary. Select organization and optional filters to load posted balances."
         title="Profit & Loss"
       />
+      <ReportFilters showAcademicPeriod />
 
-      {!hasOrganization ? <EmptyState message="Provide an organization query parameter to load this report." title="Report filters required" /> : null}
+      {!hasOrganization ? <EmptyState message="Select an organization to load this report." title="Report filters required" /> : null}
       {isLoading ? <LoadingState label="Loading profit and loss..." /> : null}
       {error ? <ErrorState message={error instanceof Error ? error.message : undefined} /> : null}
       {data ? (
