@@ -140,6 +140,8 @@ class TeacherEarningService(PayrollServiceMixin):
             status=status,
             notes=notes,
         )
+        earning.full_clean()
+        earning.save()
         return earning
 
     @classmethod
@@ -319,8 +321,12 @@ class TeacherPaymentService(PayrollServiceMixin):
                 raise ValidationError("Allocation amount must be greater than zero.")
             total_allocated += amount
             earning = TeacherEarning.objects.get(id=item.teacher_earning_id)
-            if earning.organization_id != payment.organization_id or earning.teacher_id != payment.teacher_id:
-                raise ValidationError("Allocation earning must belong to the same organization and teacher.")
+            if (
+                earning.organization_id != payment.organization_id
+                or earning.branch_id != payment.branch_id
+                or earning.teacher_id != payment.teacher_id
+            ):
+                raise ValidationError("Allocation earning must belong to the same organization, branch, and teacher.")
             if earning.status not in {TeacherEarning.Status.POSTED, TeacherEarning.Status.PARTIAL}:
                 raise ValidationError("Teacher earning must be posted before payment allocation.")
             running.setdefault(item.teacher_earning_id, ZERO_MONEY)
@@ -382,6 +388,8 @@ class TeacherPaymentService(PayrollServiceMixin):
             created_by=created_by,
             notes=notes,
         )
+        payment.full_clean()
+        payment.save()
         allocations = allocations or []
         if allocations:
             normalized = cls._normalize_allocations(allocations)
@@ -421,6 +429,8 @@ class TeacherPaymentService(PayrollServiceMixin):
         )
         if payment.status == TeacherPayment.Status.POSTED:
             return payment
+        if payment.status != TeacherPayment.Status.APPROVED:
+            raise ValidationError("Only approved teacher payments can be posted.")
         if payment.created_by_id and approved_by and payment.created_by_id == approved_by.id:
             raise ValidationError("Maker-checker violation: payment creator cannot approve/post the same payment.")
         allocations = list(payment.allocations.select_for_update())
