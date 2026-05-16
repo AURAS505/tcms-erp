@@ -4,6 +4,8 @@ import {
   getFeePlan,
   getInvoice,
   getStudentPayment,
+  approveStudentPayment,
+  createDraftStudentPayment,
   listAdvanceBalances,
   listBillingDiscounts,
   listBillingFines,
@@ -130,6 +132,33 @@ describe("billing API client", () => {
       5,
       "http://localhost:8000/api/v1/student-refunds/",
       expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
+  it("calls expected student payment workflow endpoints", async () => {
+    const fetchMock = mockFetch({ id: "payment-1" });
+
+    await createDraftStudentPayment({
+      organization: "org-1",
+      branch: "branch-1",
+      academic_year: "year-1",
+      student: "student-1",
+      payment_date_ad: "2026-04-15",
+      payment_method: "cash",
+      amount: "500.00",
+      is_advance_payment: true,
+    });
+    await approveStudentPayment("payment-1");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:8000/api/v1/student-payments/create-draft/",
+      expect.objectContaining({ body: expect.any(String), credentials: "include", method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/v1/student-payments/payment-1/approve/",
+      expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
     );
   });
 });

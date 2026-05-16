@@ -158,6 +158,41 @@ export interface StudentPaymentAllocation {
   updated_at: string;
 }
 
+export interface StudentPaymentAllocationInput {
+  fee_due?: string;
+  invoice?: string;
+  invoice_item?: string;
+  amount_allocated: string;
+  notes?: string;
+}
+
+export interface StudentPaymentDraftCreateInput {
+  organization: string;
+  branch: string;
+  academic_year: string;
+  student: string;
+  payment_date_ad: string;
+  payment_date_bs?: string;
+  payment_method: string;
+  amount: string;
+  discount_amount?: string;
+  fine_amount?: string;
+  net_received_amount?: string | null;
+  is_advance_payment?: boolean;
+  reference_number?: string;
+  file_path?: string;
+  notes?: string;
+  allocations?: StudentPaymentAllocationInput[];
+}
+
+export interface StudentPaymentApproveInput {
+  notes?: string;
+}
+
+export interface StudentPaymentVoidPlaceholderInput {
+  reason: string;
+}
+
 export interface StudentAdvanceBalance {
   id: string;
   organization: string;

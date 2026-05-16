@@ -8,6 +8,9 @@ import type {
   StudentFeeDue,
   StudentInvoice,
   StudentPayment,
+  StudentPaymentApproveInput,
+  StudentPaymentDraftCreateInput,
+  StudentPaymentVoidPlaceholderInput,
   StudentRefund,
 } from "@/types/billing";
 import type { PaginatedResponse } from "@/types/students";
@@ -59,6 +62,27 @@ export function listStudentPayments(search?: string) {
 
 export function getStudentPayment(id: string) {
   return apiClient<StudentPayment>(`${BILLING_API_BASE}/student-payments/${id}/`);
+}
+
+export function createDraftStudentPayment(payload: StudentPaymentDraftCreateInput) {
+  return apiClient<StudentPayment>(`${BILLING_API_BASE}/student-payments/create-draft/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function approveStudentPayment(id: string, payload: StudentPaymentApproveInput = {}) {
+  return apiClient<StudentPayment>(`${BILLING_API_BASE}/student-payments/${id}/approve/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function voidStudentPaymentPlaceholder(id: string, payload: StudentPaymentVoidPlaceholderInput) {
+  return apiClient<StudentPayment>(`${BILLING_API_BASE}/student-payments/${id}/void-placeholder/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listAdvanceBalances(search?: string) {
