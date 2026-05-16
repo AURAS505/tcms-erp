@@ -93,6 +93,31 @@ export const navigationItems: NavItem[] = [
     roles: allRoles,
   },
   {
+    href: "/dashboard/billing/advance-balances",
+    label: "Advance Balances",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/billing/discounts",
+    label: "Discounts",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/billing/waivers",
+    label: "Waivers",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/billing/fines",
+    label: "Fines",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/billing/refunds",
+    label: "Refunds",
+    roles: allRoles,
+  },
+  {
     href: "/dashboard/payroll",
     label: "Payroll",
     roles: allRoles,

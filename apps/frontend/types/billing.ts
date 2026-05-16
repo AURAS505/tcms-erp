@@ -193,6 +193,20 @@ export interface StudentPaymentVoidPlaceholderInput {
   reason: string;
 }
 
+export interface AdvanceApplyToDueInput {
+  student: string;
+  due: string;
+  amount: string;
+}
+
+export interface AdvanceApplyToInvoiceInput {
+  student: string;
+  invoice: string;
+  amount: string;
+}
+
+export type BillingActionResult<T> = T;
+
 export interface StudentAdvanceBalance {
   id: string;
   organization: string;

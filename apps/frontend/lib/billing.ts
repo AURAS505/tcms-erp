@@ -1,5 +1,7 @@
 import { apiClient, apiClientEnvelope } from "@/lib/api-client";
 import type {
+  AdvanceApplyToDueInput,
+  AdvanceApplyToInvoiceInput,
   BillingDiscount,
   BillingFine,
   BillingWaiver,
@@ -106,18 +108,67 @@ export function listAdvanceBalances(search?: string) {
   return listResource<StudentAdvanceBalance>(buildListPath(`${BILLING_API_BASE}/student-advance-balances/`, search));
 }
 
+export function applyAdvanceToDue(payload: AdvanceApplyToDueInput) {
+  return apiClient<StudentFeeDue>(`${BILLING_API_BASE}/student-advance-balances/apply-to-due/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function applyAdvanceToInvoice(payload: AdvanceApplyToInvoiceInput) {
+  return apiClient<StudentInvoice>(`${BILLING_API_BASE}/student-advance-balances/apply-to-invoice/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listBillingDiscounts(search?: string) {
   return listResource<BillingDiscount>(buildListPath(`${BILLING_API_BASE}/billing-discounts/`, search));
+}
+
+export function approveBillingDiscount(id: string) {
+  return apiClient<BillingDiscount>(`${BILLING_API_BASE}/billing-discounts/${id}/approve/`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 export function listBillingWaivers(search?: string) {
   return listResource<BillingWaiver>(buildListPath(`${BILLING_API_BASE}/billing-waivers/`, search));
 }
 
+export function approveBillingWaiver(id: string) {
+  return apiClient<BillingWaiver>(`${BILLING_API_BASE}/billing-waivers/${id}/approve/`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export function listBillingFines(search?: string) {
   return listResource<BillingFine>(buildListPath(`${BILLING_API_BASE}/billing-fines/`, search));
 }
 
+export function approveBillingFine(id: string) {
+  return apiClient<BillingFine>(`${BILLING_API_BASE}/billing-fines/${id}/approve/`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export function listStudentRefunds(search?: string) {
   return listResource<StudentRefund>(buildListPath(`${BILLING_API_BASE}/student-refunds/`, search));
+}
+
+export function approveStudentRefund(id: string) {
+  return apiClient<StudentRefund>(`${BILLING_API_BASE}/student-refunds/${id}/approve/`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function payStudentRefund(id: string) {
+  return apiClient<StudentRefund>(`${BILLING_API_BASE}/student-refunds/${id}/pay/`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }

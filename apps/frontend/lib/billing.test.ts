@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  applyAdvanceToDue,
+  applyAdvanceToInvoice,
+  approveBillingDiscount,
+  approveBillingFine,
+  approveBillingWaiver,
+  approveStudentRefund,
   getFeeDue,
   getFeePlan,
   getInvoice,
@@ -15,6 +21,7 @@ import {
   listInvoices,
   listStudentPayments,
   listStudentRefunds,
+  payStudentRefund,
 } from "@/lib/billing";
 
 const mockFetch = (data: unknown) => {
@@ -176,6 +183,54 @@ describe("billing API client", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "http://localhost:8000/api/v1/student-payments/payment-1/approve/",
+      expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
+    );
+  });
+
+  it("calls expected adjustment and refund workflow endpoints", async () => {
+    const fetchMock = mockFetch({ id: "record-1" });
+
+    await applyAdvanceToDue({ student: "student-1", due: "due-1", amount: "100.00" });
+    await applyAdvanceToInvoice({ student: "student-1", invoice: "invoice-1", amount: "200.00" });
+    await approveBillingDiscount("discount-1");
+    await approveBillingWaiver("waiver-1");
+    await approveBillingFine("fine-1");
+    await approveStudentRefund("refund-1");
+    await payStudentRefund("refund-1");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:8000/api/v1/student-advance-balances/apply-to-due/",
+      expect.objectContaining({ body: JSON.stringify({ student: "student-1", due: "due-1", amount: "100.00" }), credentials: "include", method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/v1/student-advance-balances/apply-to-invoice/",
+      expect.objectContaining({ body: JSON.stringify({ student: "student-1", invoice: "invoice-1", amount: "200.00" }), credentials: "include", method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "http://localhost:8000/api/v1/billing-discounts/discount-1/approve/",
+      expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "http://localhost:8000/api/v1/billing-waivers/waiver-1/approve/",
+      expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "http://localhost:8000/api/v1/billing-fines/fine-1/approve/",
+      expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "http://localhost:8000/api/v1/student-refunds/refund-1/approve/",
+      expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      "http://localhost:8000/api/v1/student-refunds/refund-1/pay/",
       expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
     );
   });

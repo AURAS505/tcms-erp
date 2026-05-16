@@ -45,6 +45,14 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Dues" })).toHaveAttribute("href", "/dashboard/billing/dues");
     expect(screen.getByRole("link", { name: "Invoices" })).toHaveAttribute("href", "/dashboard/billing/invoices");
     expect(screen.getByRole("link", { name: "Payments" })).toHaveAttribute("href", "/dashboard/billing/payments");
+    expect(screen.getByRole("link", { name: "Advance Balances" })).toHaveAttribute(
+      "href",
+      "/dashboard/billing/advance-balances",
+    );
+    expect(screen.getByRole("link", { name: "Discounts" })).toHaveAttribute("href", "/dashboard/billing/discounts");
+    expect(screen.getByRole("link", { name: "Waivers" })).toHaveAttribute("href", "/dashboard/billing/waivers");
+    expect(screen.getByRole("link", { name: "Fines" })).toHaveAttribute("href", "/dashboard/billing/fines");
+    expect(screen.getByRole("link", { name: "Refunds" })).toHaveAttribute("href", "/dashboard/billing/refunds");
     expect(screen.getByRole("link", { name: "Payroll" })).toHaveAttribute("href", "/dashboard/payroll");
     expect(screen.getByRole("link", { name: "Teacher Earnings" })).toHaveAttribute("href", "/dashboard/payroll/earnings");
     expect(screen.getByRole("link", { name: "Teacher Payments" })).toHaveAttribute("href", "/dashboard/payroll/payments");
