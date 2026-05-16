@@ -22,6 +22,16 @@ import type { TeacherEarning, TeacherPaymentAllocationInput, TeacherPaymentDraft
 const financialRoles: Role[] = ["super_admin", "institute_owner", "accountant"];
 const paymentMethods = ["cash", "bank", "online", "cheque", "wallet", "other"];
 
+interface AllocationRow {
+  id: string;
+  earningId: string;
+  amount: string;
+}
+
+function newAllocationRow(): AllocationRow {
+  return { id: `${Date.now()}-${Math.random()}`, earningId: "", amount: "" };
+}
+
 function isQueryLoading(...states: { isLoading: boolean }[]) {
   return states.some((state) => state.isLoading);
 }
@@ -34,8 +44,8 @@ export default function NewTeacherPaymentPage() {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedAcademicYear, setSelectedAcademicYear] = useState("");
   const [selectedTeacher, setSelectedTeacher] = useState("");
-  const [selectedEarningId, setSelectedEarningId] = useState("");
-  const [allocationAmount, setAllocationAmount] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [allocationRows, setAllocationRows] = useState<AllocationRow[]>([newAllocationRow()]);
   const [errorMessage, setErrorMessage] = useState("");
 
   const organizations = useQuery({ queryKey: ["teacher-payment-form-organizations"], queryFn: listOrganizations });
@@ -62,26 +72,58 @@ export default function NewTeacherPaymentPage() {
     },
   });
 
+  const openEarnings = earnings.data?.data ?? [];
+  const selectedTargets = allocationRows.map((row) => row.earningId).filter(Boolean);
+  const duplicateTargets = new Set(selectedTargets.filter((target, index) => selectedTargets.indexOf(target) !== index));
+  const paymentAmountNumber = Number(paymentAmount) || 0;
+  const allocationTotal = allocationRows.reduce((total, row) => total + (Number(row.amount) || 0), 0);
+  const unallocatedAmount = paymentAmountNumber - allocationTotal;
+  const allocationValidationMessages = allocationRows.flatMap((row, index) => {
+    const messages: string[] = [];
+    const selectedEarning = openEarnings.find((earning) => earning.id === row.earningId);
+    const parsedAmount = Number(row.amount);
+    if (!row.earningId) messages.push(`Allocation row ${index + 1} needs an earning.`);
+    if (!row.amount || parsedAmount <= 0) messages.push(`Allocation row ${index + 1} amount must be greater than zero.`);
+    if (row.earningId && duplicateTargets.has(row.earningId)) messages.push(`Allocation row ${index + 1} duplicates another allocation.`);
+    if (selectedEarning && parsedAmount > Number(selectedEarning.balance_amount)) {
+      messages.push(`Allocation row ${index + 1} amount cannot exceed the selected earning balance.`);
+    }
+    return messages;
+  });
+  if (allocationTotal > paymentAmountNumber) {
+    allocationValidationMessages.push("Allocation total cannot exceed payment amount.");
+  }
+  const hasAllocationValidationError =
+    paymentAmountNumber <= 0 || allocationRows.length === 0 || allocationValidationMessages.length > 0;
+
+  function resetAllocations() {
+    setAllocationRows([newAllocationRow()]);
+    setErrorMessage("");
+  }
+
+  function updateAllocationRow(rowId: string, patch: Partial<AllocationRow>) {
+    setAllocationRows((rows) => rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)));
+  }
+
+  function removeAllocationRow(rowId: string) {
+    setAllocationRows((rows) => {
+      const nextRows = rows.filter((row) => row.id !== rowId);
+      return nextRows.length ? nextRows : [newAllocationRow()];
+    });
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setErrorMessage("");
+    if (hasAllocationValidationError) {
+      setErrorMessage(allocationValidationMessages[0] || "Payment amount and allocation rows are required.");
+      return;
+    }
     const formData = new FormData(event.currentTarget);
-    const selectedEarning = earnings.data?.data.find((earning) => earning.id === selectedEarningId);
-    const allocationAmountNumber = Number(allocationAmount);
-    if (!selectedEarning) {
-      setErrorMessage("Select an unpaid posted teacher earning before creating the draft.");
-      return;
-    }
-    if (!allocationAmount || allocationAmountNumber <= 0) {
-      setErrorMessage("Allocation amount must be greater than zero.");
-      return;
-    }
-    if (allocationAmountNumber > Number(selectedEarning.balance_amount)) {
-      setErrorMessage("Allocation amount cannot exceed the selected earning balance.");
-      return;
-    }
-    const allocations: TeacherPaymentAllocationInput[] =
-      selectedEarningId && allocationAmount ? [{ teacher_earning: selectedEarningId, amount_allocated: allocationAmount }] : [];
+    const allocations: TeacherPaymentAllocationInput[] = allocationRows.map((row) => ({
+      teacher_earning: row.earningId,
+      amount_allocated: row.amount,
+    }));
     const payload: TeacherPaymentDraftCreateInput = {
       organization: String(formData.get("organization") ?? ""),
       branch: String(formData.get("branch") ?? ""),
@@ -99,22 +141,8 @@ export default function NewTeacherPaymentPage() {
 
   const loadingLookups = isQueryLoading(organizations, branches, academicYears, teachers);
   const lookupError = organizations.error || branches.error || academicYears.error || teachers.error;
-  const selectedEarning = earnings.data?.data.find((earning) => earning.id === selectedEarningId);
-  const allocationAmountNumber = Number(allocationAmount) || 0;
-  const allocationValidationMessage =
-    selectedEarning && allocationAmountNumber > Number(selectedEarning.balance_amount)
-      ? "Allocation amount cannot exceed the selected earning balance."
-      : "";
   const earningColumns = useMemo<SimpleTableColumn<TeacherEarning>[]>(
     () => [
-      {
-        header: "Select",
-        render: (earning) => (
-          <Button onClick={() => setSelectedEarningId(earning.id)} type="button" variant={earning.id === selectedEarningId ? "primary" : "secondary"}>
-            {earning.id === selectedEarningId ? "Selected" : "Select"}
-          </Button>
-        ),
-      },
       { header: "Period", render: (earning) => earning.period_label || earning.id },
       { header: "Date", render: (earning) => earning.earning_date_ad },
       { header: "Status", render: (earning) => <StatusBadge status={earning.status} /> },
@@ -122,7 +150,7 @@ export default function NewTeacherPaymentPage() {
       { header: "Paid", render: (earning) => <MoneyDisplay amount={earning.paid_amount} /> },
       { header: "Balance", render: (earning) => <MoneyDisplay amount={earning.balance_amount} /> },
     ],
-    [selectedEarningId],
+    [],
   );
 
   return (
@@ -159,7 +187,7 @@ export default function NewTeacherPaymentPage() {
               name="organization"
               onChange={(event) => {
                 setSelectedOrganization(event.target.value);
-                setSelectedEarningId("");
+                resetAllocations();
               }}
               required
               value={selectedOrganization}
@@ -179,7 +207,7 @@ export default function NewTeacherPaymentPage() {
               name="branch"
               onChange={(event) => {
                 setSelectedBranch(event.target.value);
-                setSelectedEarningId("");
+                resetAllocations();
               }}
               required
               value={selectedBranch}
@@ -199,7 +227,7 @@ export default function NewTeacherPaymentPage() {
               name="academic_year"
               onChange={(event) => {
                 setSelectedAcademicYear(event.target.value);
-                setSelectedEarningId("");
+                resetAllocations();
               }}
               required
               value={selectedAcademicYear}
@@ -219,8 +247,7 @@ export default function NewTeacherPaymentPage() {
               name="teacher"
               onChange={(event) => {
                 setSelectedTeacher(event.target.value);
-                setSelectedEarningId("");
-                setAllocationAmount("");
+                resetAllocations();
               }}
               required
               value={selectedTeacher}
@@ -244,15 +271,15 @@ export default function NewTeacherPaymentPage() {
               ))}
             </select>
           </label>
-          <TextInput label="Amount" min="0.01" name="amount" required step="0.01" type="number" />
+          <TextInput label="Amount" min="0.01" name="amount" onChange={(event) => setPaymentAmount(event.target.value)} required step="0.01" type="number" value={paymentAmount} />
           <TextInput label="Reference number" name="reference_number" />
         </fieldset>
 
         <fieldset className="grid gap-4 rounded-lg border border-slate-200 p-4" disabled={!canMutate || createMutation.isPending}>
-          <div className="md:col-span-2">
-            <h2 className="text-sm font-semibold text-[#262B40]">Posted earning allocation</h2>
+          <div>
+            <h2 className="text-sm font-semibold text-[#262B40]">Posted earning allocations</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Select an unpaid posted or partial teacher earning. Backend validation still controls final allocation.
+              Select one or more unpaid posted or partial teacher earnings. Backend validation still controls final allocation.
             </p>
           </div>
           {!selectedTeacher ? (
@@ -262,37 +289,92 @@ export default function NewTeacherPaymentPage() {
           {earnings.error ? (
             <p className="text-sm text-red-700">{earnings.error instanceof Error ? earnings.error.message : "Unable to load teacher earnings."}</p>
           ) : null}
-          {selectedTeacher && !earnings.isLoading && !earnings.error && earnings.data?.data.length === 0 ? (
+          {selectedTeacher && !earnings.isLoading && !earnings.error && openEarnings.length === 0 ? (
             <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600">No unpaid posted teacher earnings were found for this teacher.</p>
           ) : null}
-          {earnings.data && earnings.data.data.length > 0 ? (
-            <SimpleTable columns={earningColumns} getRowKey={(earning) => earning.id} rows={earnings.data.data} />
-          ) : null}
-          {selectedEarning ? (
-            <div className="grid gap-3 rounded-md bg-slate-50 px-3 py-3 text-sm text-slate-700 md:grid-cols-3">
-              <span>
-                <span className="font-semibold">Selected balance:</span> <MoneyDisplay amount={selectedEarning.balance_amount} />
-              </span>
-              <span>
-                <span className="font-semibold">Net:</span> <MoneyDisplay amount={selectedEarning.net_amount} />
-              </span>
-              <span>
-                <span className="font-semibold">Paid:</span> <MoneyDisplay amount={selectedEarning.paid_amount} />
-              </span>
+          {openEarnings.length > 0 ? <SimpleTable columns={earningColumns} getRowKey={(earning) => earning.id} rows={openEarnings} /> : null}
+
+          <div className="space-y-3">
+            {allocationRows.map((row, index) => {
+              const selectedEarning = openEarnings.find((earning) => earning.id === row.earningId);
+              return (
+                <div className="grid gap-3 rounded-md border border-slate-200 p-3 md:grid-cols-[1fr_180px_auto]" key={row.id}>
+                  <label className="block text-sm font-medium text-slate-700">
+                    Earning {index + 1}
+                    <select
+                      className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!selectedTeacher || earnings.isLoading || openEarnings.length === 0}
+                      name={`teacher_earning_${index + 1}`}
+                      onChange={(event) => updateAllocationRow(row.id, { earningId: event.target.value, amount: "" })}
+                      value={row.earningId}
+                    >
+                      <option value="">{selectedTeacher ? "Select earning" : "Select teacher first"}</option>
+                      {openEarnings.map((earning) => {
+                        const disabled = Boolean(earning.id !== row.earningId && selectedTargets.includes(earning.id));
+                        return (
+                          <option disabled={disabled} key={earning.id} value={earning.id}>
+                            {earning.period_label || earning.id} - {earning.earning_date_ad} - balance {Number(earning.balance_amount).toFixed(2)}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                  <TextInput
+                    disabled={!selectedEarning}
+                    label={`Allocation amount ${index + 1}`}
+                    min="0.01"
+                    name={`amount_allocated_${index + 1}`}
+                    onChange={(event) => updateAllocationRow(row.id, { amount: event.target.value })}
+                    step="0.01"
+                    type="number"
+                    value={row.amount}
+                  />
+                  <div className="flex items-end">
+                    <Button disabled={allocationRows.length === 1 && !row.earningId && !row.amount} onClick={() => removeAllocationRow(row.id)} type="button" variant="secondary">
+                      Remove
+                    </Button>
+                  </div>
+                  {selectedEarning ? (
+                    <div className="grid gap-2 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 md:col-span-3 md:grid-cols-3">
+                      <span>
+                        <span className="font-semibold">Selected balance:</span> <MoneyDisplay amount={selectedEarning.balance_amount} />
+                      </span>
+                      <span>
+                        <span className="font-semibold">Net:</span> <MoneyDisplay amount={selectedEarning.net_amount} />
+                      </span>
+                      <span>
+                        <span className="font-semibold">Paid:</span> <MoneyDisplay amount={selectedEarning.paid_amount} />
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <Button disabled={!selectedTeacher || earnings.isLoading || openEarnings.length === 0} onClick={() => setAllocationRows((rows) => [...rows, newAllocationRow()])} type="button" variant="secondary">
+            Add allocation
+          </Button>
+
+          <div className="grid gap-2 rounded-md bg-slate-50 px-3 py-3 text-sm text-slate-700 md:grid-cols-3">
+            <span>
+              <span className="font-semibold">Payment amount:</span> <MoneyDisplay amount={paymentAmountNumber} />
+            </span>
+            <span>
+              <span className="font-semibold">Allocation total:</span> <MoneyDisplay amount={allocationTotal} />
+            </span>
+            <span>
+              <span className="font-semibold">Unallocated amount:</span> <MoneyDisplay amount={unallocatedAmount} />
+            </span>
+          </div>
+
+          {allocationValidationMessages.length ? (
+            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {allocationValidationMessages.map((message) => (
+                <p key={message}>{message}</p>
+              ))}
             </div>
           ) : null}
-          <TextInput
-            disabled={!selectedEarning}
-            label="Allocation amount"
-            min="0.01"
-            name="amount_allocated"
-            onChange={(event) => setAllocationAmount(event.target.value)}
-            required
-            step="0.01"
-            type="number"
-            value={allocationAmount}
-          />
-          {allocationValidationMessage ? <p className="text-sm font-medium text-red-700">{allocationValidationMessage}</p> : null}
         </fieldset>
 
         <label className="block text-sm font-medium text-slate-700">
@@ -301,7 +383,7 @@ export default function NewTeacherPaymentPage() {
         </label>
 
         <div className="flex justify-end gap-2">
-          <Button disabled={!canMutate || Boolean(allocationValidationMessage)} isLoading={createMutation.isPending} type="submit">
+          <Button disabled={!canMutate || hasAllocationValidationError} isLoading={createMutation.isPending} type="submit">
             Create draft payment
           </Button>
         </div>
