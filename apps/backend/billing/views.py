@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import status
 from rest_framework.decorators import action
 
+from common.permissions import BranchScopedPermission, IsFinancialApprover, IsPaymentDraftCreator
 from common.responses import api_success, validation_error_response
 from common.viewsets import BaseModelViewSet, BaseReadOnlyModelViewSet
 
@@ -87,6 +88,15 @@ class StudentPaymentViewSet(BaseReadOnlyModelViewSet):
     serializer_class = StudentPaymentSerializer
     search_fields = ("receipt_number", "draft_receipt_number", "student__admission_number", "student__full_name")
     ordering_fields = ("payment_date_ad", "amount", "created_at", "status")
+
+    def get_permissions(self):
+        if self.action == "create_draft":
+            permission_classes = [BranchScopedPermission, IsPaymentDraftCreator]
+        elif self.action in {"approve", "void_placeholder"}:
+            permission_classes = [BranchScopedPermission, IsFinancialApprover]
+        else:
+            permission_classes = self.permission_classes
+        return [permission() for permission in permission_classes]
 
     def get_queryset(self):
         return super().get_queryset().prefetch_related("allocations")

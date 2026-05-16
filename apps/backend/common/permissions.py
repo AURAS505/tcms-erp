@@ -1,14 +1,38 @@
+from django.db.models import Q
 from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticated
 
 from accounts.models import Role
 
 
-def user_has_role(user, *role_codes: str) -> bool:
+def user_has_role(user, role_code_or_name: str) -> bool:
+    return user_has_any_role(user, [role_code_or_name])
+
+
+def user_has_any_role(user, role_codes_or_names) -> bool:
     if not user or not user.is_authenticated:
         return False
     if getattr(user, "is_superuser", False):
         return True
-    return user.role_assignments.filter(role__code__in=role_codes, is_active=True, role__is_active=True).exists()
+    values = [str(value) for value in role_codes_or_names if value]
+    return user.role_assignments.filter(
+        Q(role__code__in=values) | Q(role__name__in=values),
+        is_active=True,
+        role__is_active=True,
+    ).exists()
+
+
+def user_has_permission_code(user, permission_code: str) -> bool:
+    if not user or not user.is_authenticated:
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    return user.role_assignments.filter(
+        is_active=True,
+        role__is_active=True,
+        role__permission_assignments__is_active=True,
+        role__permission_assignments__permission__code=permission_code,
+        role__permission_assignments__permission__is_active=True,
+    ).exists()
 
 
 class IsSuperAdmin(BasePermission):
@@ -45,6 +69,43 @@ class IsAuditorReadOnly(BasePermission):
         return user_has_role(request.user, Role.RoleCode.AUDITOR)
 
 
+class IsReadOnlyAuditor(IsAuditorReadOnly):
+    pass
+
+
+class IsPaymentDraftCreator(BasePermission):
+    allowed_roles = (
+        Role.RoleCode.SUPER_ADMIN,
+        Role.RoleCode.INSTITUTE_OWNER,
+        Role.RoleCode.BRANCH_ADMIN,
+        Role.RoleCode.ACCOUNTANT,
+        Role.RoleCode.RECEPTIONIST,
+    )
+
+    def has_permission(self, request, view):
+        return user_has_any_role(request.user, self.allowed_roles) or user_has_permission_code(
+            request.user,
+            "billing.student_payment.create_draft",
+        )
+
+
+class IsFinancialApprover(BasePermission):
+    allowed_roles = (
+        Role.RoleCode.SUPER_ADMIN,
+        Role.RoleCode.INSTITUTE_OWNER,
+        Role.RoleCode.ACCOUNTANT,
+    )
+    allowed_permission_codes = (
+        "billing.student_payment.approve",
+        "billing.student_payment.post",
+    )
+
+    def has_permission(self, request, view):
+        return user_has_any_role(request.user, self.allowed_roles) or any(
+            user_has_permission_code(request.user, permission_code) for permission_code in self.allowed_permission_codes
+        )
+
+
 class BranchScopedPermission(BasePermission):
     """
     Placeholder for branch isolation. It enforces authenticated access now and
@@ -78,5 +139,11 @@ __all__ = [
     "IsAccountant",
     "IsReceptionist",
     "IsAuditorReadOnly",
+    "IsReadOnlyAuditor",
+    "IsPaymentDraftCreator",
+    "IsFinancialApprover",
     "BranchScopedPermission",
+    "user_has_role",
+    "user_has_any_role",
+    "user_has_permission_code",
 ]

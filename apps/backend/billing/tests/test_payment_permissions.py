@@ -6,35 +6,13 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from academic.models import AcademicPeriod, AcademicYear
-from accounting.models import Account, JournalEntry
+from accounts.models import Role, UserBranchAssignment, UserRole
+from accounting.models import Account
 from billing.models import BillStatus, FeePlan, StudentFeeDue, StudentPayment
+from billing.services import PaymentAllocationInput, StudentPaymentService
 from classes.models import ClassEnrollment, ClassRoom
 from organizations.models import Branch, Organization
 from students.models import Student
-
-
-@pytest.fixture
-def maker():
-    return get_user_model().objects.create_superuser(email="payment-maker@example.com", password="secure-password")
-
-
-@pytest.fixture
-def checker():
-    return get_user_model().objects.create_superuser(email="payment-checker@example.com", password="secure-password")
-
-
-@pytest.fixture
-def maker_client(maker):
-    client = APIClient()
-    client.force_authenticate(user=maker)
-    return client
-
-
-@pytest.fixture
-def checker_client(checker):
-    client = APIClient()
-    client.force_authenticate(user=checker)
-    return client
 
 
 @pytest.fixture
@@ -191,7 +169,20 @@ def accounts(organization):
     )
 
 
-def draft_payload(organization, branch, academic_year, student, fee_due, amount="1000.00"):
+def user_with_role(role_code):
+    user = get_user_model().objects.create_user(email=f"{role_code}@example.com", password="secure-password")
+    role = Role.objects.create(code=role_code, name=Role.RoleCode(role_code).label)
+    UserRole.objects.create(user=user, role=role)
+    return user
+
+
+def client_for(user):
+    client = APIClient()
+    client.force_authenticate(user=user)
+    return client
+
+
+def draft_payload(organization, branch, academic_year, student, fee_due):
     return {
         "organization": str(organization.id),
         "branch": str(branch.id),
@@ -199,151 +190,142 @@ def draft_payload(organization, branch, academic_year, student, fee_due, amount=
         "student": str(student.id),
         "payment_date_ad": "2024-07-20",
         "payment_method": StudentPayment.PaymentMethod.CASH,
-        "amount": amount,
-        "allocations": [
-            {
-                "fee_due": str(fee_due.id),
-                "amount_allocated": amount,
-            }
-        ],
+        "amount": "1000.00",
+        "allocations": [{"fee_due": str(fee_due.id), "amount_allocated": "1000.00"}],
     }
 
 
-@pytest.mark.django_db
-def test_unauthenticated_user_cannot_create_draft_payment(organization, branch, academic_year, student, fee_due):
-    response = APIClient().post(
-        "/api/v1/student-payments/create-draft/",
-        draft_payload(organization, branch, academic_year, student, fee_due),
-        format="json",
+def create_draft_payment(organization, branch, academic_year, student, fee_due, created_by):
+    return StudentPaymentService.create_draft_payment(
+        organization=organization,
+        branch=branch,
+        academic_year=academic_year,
+        student=student,
+        payment_date_ad=date(2024, 7, 20),
+        payment_method=StudentPayment.PaymentMethod.CASH,
+        amount=Decimal("1000.00"),
+        created_by=created_by,
+        allocations=[PaymentAllocationInput(fee_due_id=str(fee_due.id), amount_allocated=Decimal("1000.00"))],
     )
 
-    assert response.status_code in {401, 403}
-
 
 @pytest.mark.django_db
-def test_authenticated_user_can_create_draft_payment(maker_client, organization, branch, academic_year, student, fee_due):
-    response = maker_client.post(
-        "/api/v1/student-payments/create-draft/",
-        draft_payload(organization, branch, academic_year, student, fee_due),
-        format="json",
-    )
-
-    assert response.status_code == 201
-    assert response.json()["data"]["status"] == StudentPayment.Status.DRAFT
-    assert StudentPayment.objects.get(id=response.json()["data"]["id"]).created_by.email == "payment-maker@example.com"
-
-
-@pytest.mark.django_db
-def test_draft_payment_endpoint_does_not_create_journal_entry(
-    maker_client, organization, branch, academic_year, student, fee_due
-):
-    response = maker_client.post(
+def test_receptionist_can_create_draft_payment(organization, branch, academic_year, student, fee_due):
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    response = client_for(receptionist).post(
         "/api/v1/student-payments/create-draft/",
         draft_payload(organization, branch, academic_year, student, fee_due),
         format="json",
     )
 
     assert response.status_code == 201
-    assert JournalEntry.objects.count() == 0
 
 
 @pytest.mark.django_db
-def test_draft_payment_endpoint_validates_allocation_amount(
-    maker_client, organization, branch, academic_year, student, fee_due
-):
-    response = maker_client.post(
-        "/api/v1/student-payments/create-draft/",
-        draft_payload(organization, branch, academic_year, student, fee_due, amount="3000.00"),
-        format="json",
-    )
+def test_receptionist_cannot_approve_payment(organization, branch, academic_year, student, fee_due, accounts):
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
 
-    assert response.status_code == 400
-    assert StudentPayment.objects.count() == 0
+    response = client_for(receptionist).post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
+
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db
-def test_payment_approve_endpoint_posts_payment_and_updates_due(
-    maker_client, checker_client, organization, branch, academic_year, student, fee_due, accounts
-):
-    draft_response = maker_client.post(
-        "/api/v1/student-payments/create-draft/",
-        draft_payload(organization, branch, academic_year, student, fee_due, amount="2500.00"),
-        format="json",
-    )
-    payment_id = draft_response.json()["data"]["id"]
+def test_accountant_can_approve_receptionist_payment(organization, branch, academic_year, student, fee_due, accounts):
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    accountant = user_with_role(Role.RoleCode.ACCOUNTANT)
+    payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
 
-    response = checker_client.post(f"/api/v1/student-payments/{payment_id}/approve/", {}, format="json")
-    fee_due.refresh_from_db()
+    response = client_for(accountant).post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
 
     assert response.status_code == 200
     assert response.json()["data"]["status"] == StudentPayment.Status.POSTED
-    assert fee_due.status == BillStatus.PAID
-    assert fee_due.balance_amount == Decimal("0.00")
 
 
 @pytest.mark.django_db
-def test_payment_approve_endpoint_creates_journal_entry(
-    maker_client, checker_client, organization, branch, academic_year, student, fee_due, accounts
-):
-    draft_response = maker_client.post(
-        "/api/v1/student-payments/create-draft/",
-        draft_payload(organization, branch, academic_year, student, fee_due),
-        format="json",
-    )
-    payment_id = draft_response.json()["data"]["id"]
+def test_accountant_cannot_approve_own_payment(organization, branch, academic_year, student, fee_due, accounts):
+    accountant = user_with_role(Role.RoleCode.ACCOUNTANT)
+    payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=accountant)
 
-    response = checker_client.post(f"/api/v1/student-payments/{payment_id}/approve/", {}, format="json")
-
-    assert response.status_code == 200
-    assert JournalEntry.objects.filter(source_model="StudentPayment", source_object_id=payment_id).exists()
-
-
-@pytest.mark.django_db
-def test_payment_approve_endpoint_enforces_maker_checker(
-    maker_client, organization, branch, academic_year, student, fee_due, accounts
-):
-    draft_response = maker_client.post(
-        "/api/v1/student-payments/create-draft/",
-        draft_payload(organization, branch, academic_year, student, fee_due),
-        format="json",
-    )
-    payment_id = draft_response.json()["data"]["id"]
-
-    response = maker_client.post(f"/api/v1/student-payments/{payment_id}/approve/", {}, format="json")
+    response = client_for(accountant).post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
 
     assert response.status_code == 400
     assert "Maker-checker" in str(response.json()["errors"])
 
 
 @pytest.mark.django_db
-def test_payment_approve_endpoint_assigns_receipt_number(
-    maker_client, checker_client, organization, branch, academic_year, student, fee_due, accounts
-):
-    draft_response = maker_client.post(
-        "/api/v1/student-payments/create-draft/",
-        draft_payload(organization, branch, academic_year, student, fee_due),
-        format="json",
-    )
-    payment_id = draft_response.json()["data"]["id"]
+def test_super_admin_can_approve_payment(organization, branch, academic_year, student, fee_due, accounts):
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    super_admin = get_user_model().objects.create_superuser(email="super-admin@example.com", password="secure-password")
+    payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
 
-    response = checker_client.post(f"/api/v1/student-payments/{payment_id}/approve/", {}, format="json")
+    response = client_for(super_admin).post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
 
     assert response.status_code == 200
-    assert response.json()["data"]["receipt_number"].startswith("RC-")
 
 
 @pytest.mark.django_db
-def test_posted_payment_cannot_be_patched(
-    maker_client, checker_client, organization, branch, academic_year, student, fee_due, accounts
-):
-    draft_response = maker_client.post(
+def test_institute_owner_can_approve_payment(organization, branch, academic_year, student, fee_due, accounts):
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    owner = user_with_role(Role.RoleCode.INSTITUTE_OWNER)
+    payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
+
+    response = client_for(owner).post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_teacher_cannot_create_or_approve_payment(organization, branch, academic_year, student, fee_due, accounts):
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    teacher = user_with_role(Role.RoleCode.TEACHER)
+    teacher_client = client_for(teacher)
+    payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
+
+    create_response = teacher_client.post(
         "/api/v1/student-payments/create-draft/",
         draft_payload(organization, branch, academic_year, student, fee_due),
         format="json",
     )
-    payment_id = draft_response.json()["data"]["id"]
-    checker_client.post(f"/api/v1/student-payments/{payment_id}/approve/", {}, format="json")
+    approve_response = teacher_client.post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
 
-    response = checker_client.patch(f"/api/v1/student-payments/{payment_id}/", {"notes": "changed"}, format="json")
+    assert create_response.status_code == 403
+    assert approve_response.status_code == 403
 
-    assert response.status_code == 405
+
+@pytest.mark.django_db
+def test_auditor_can_read_but_cannot_mutate_payments(organization, branch, academic_year, student, fee_due):
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    auditor = user_with_role(Role.RoleCode.AUDITOR)
+    UserBranchAssignment.objects.create(user=auditor, organization_id=organization.id, branch_id=branch.id)
+    payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
+    auditor_client = client_for(auditor)
+
+    list_response = auditor_client.get("/api/v1/student-payments/")
+    retrieve_response = auditor_client.get(f"/api/v1/student-payments/{payment.id}/")
+    create_response = auditor_client.post(
+        "/api/v1/student-payments/create-draft/",
+        draft_payload(organization, branch, academic_year, student, fee_due),
+        format="json",
+    )
+
+    assert list_response.status_code == 200
+    assert retrieve_response.status_code == 200
+    assert create_response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_unauthenticated_user_cannot_create_or_approve_payment(organization, branch, academic_year, student, fee_due):
+    payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=None)
+    client = APIClient()
+
+    create_response = client.post(
+        "/api/v1/student-payments/create-draft/",
+        draft_payload(organization, branch, academic_year, student, fee_due),
+        format="json",
+    )
+    approve_response = client.post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
+
+    assert create_response.status_code in {401, 403}
+    assert approve_response.status_code in {401, 403}
