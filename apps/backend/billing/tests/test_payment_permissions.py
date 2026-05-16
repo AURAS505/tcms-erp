@@ -169,10 +169,16 @@ def accounts(organization):
     )
 
 
-def user_with_role(role_code):
+def user_with_role(role_code, branch=None, organization=None):
     user = get_user_model().objects.create_user(email=f"{role_code}@example.com", password="secure-password")
     role = Role.objects.create(code=role_code, name=Role.RoleCode(role_code).label)
     UserRole.objects.create(user=user, role=role)
+    if branch is not None:
+        UserBranchAssignment.objects.create(
+            user=user,
+            organization_id=(organization or branch.organization).id,
+            branch_id=branch.id,
+        )
     return user
 
 
@@ -211,7 +217,7 @@ def create_draft_payment(organization, branch, academic_year, student, fee_due, 
 
 @pytest.mark.django_db
 def test_receptionist_can_create_draft_payment(organization, branch, academic_year, student, fee_due):
-    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST, branch=branch)
     response = client_for(receptionist).post(
         "/api/v1/student-payments/create-draft/",
         draft_payload(organization, branch, academic_year, student, fee_due),
@@ -223,7 +229,7 @@ def test_receptionist_can_create_draft_payment(organization, branch, academic_ye
 
 @pytest.mark.django_db
 def test_receptionist_cannot_approve_payment(organization, branch, academic_year, student, fee_due, accounts):
-    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST, branch=branch)
     payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
 
     response = client_for(receptionist).post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
@@ -233,8 +239,8 @@ def test_receptionist_cannot_approve_payment(organization, branch, academic_year
 
 @pytest.mark.django_db
 def test_accountant_can_approve_receptionist_payment(organization, branch, academic_year, student, fee_due, accounts):
-    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
-    accountant = user_with_role(Role.RoleCode.ACCOUNTANT)
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST, branch=branch)
+    accountant = user_with_role(Role.RoleCode.ACCOUNTANT, branch=branch)
     payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
 
     response = client_for(accountant).post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
@@ -245,7 +251,7 @@ def test_accountant_can_approve_receptionist_payment(organization, branch, acade
 
 @pytest.mark.django_db
 def test_accountant_cannot_approve_own_payment(organization, branch, academic_year, student, fee_due, accounts):
-    accountant = user_with_role(Role.RoleCode.ACCOUNTANT)
+    accountant = user_with_role(Role.RoleCode.ACCOUNTANT, branch=branch)
     payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=accountant)
 
     response = client_for(accountant).post(f"/api/v1/student-payments/{payment.id}/approve/", {}, format="json")
@@ -256,7 +262,7 @@ def test_accountant_cannot_approve_own_payment(organization, branch, academic_ye
 
 @pytest.mark.django_db
 def test_super_admin_can_approve_payment(organization, branch, academic_year, student, fee_due, accounts):
-    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST, branch=branch)
     super_admin = get_user_model().objects.create_superuser(email="super-admin@example.com", password="secure-password")
     payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
 
@@ -267,7 +273,7 @@ def test_super_admin_can_approve_payment(organization, branch, academic_year, st
 
 @pytest.mark.django_db
 def test_institute_owner_can_approve_payment(organization, branch, academic_year, student, fee_due, accounts):
-    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST, branch=branch)
     owner = user_with_role(Role.RoleCode.INSTITUTE_OWNER)
     payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
 
@@ -278,8 +284,8 @@ def test_institute_owner_can_approve_payment(organization, branch, academic_year
 
 @pytest.mark.django_db
 def test_teacher_cannot_create_or_approve_payment(organization, branch, academic_year, student, fee_due, accounts):
-    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
-    teacher = user_with_role(Role.RoleCode.TEACHER)
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST, branch=branch)
+    teacher = user_with_role(Role.RoleCode.TEACHER, branch=branch)
     teacher_client = client_for(teacher)
     payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)
 
@@ -296,7 +302,7 @@ def test_teacher_cannot_create_or_approve_payment(organization, branch, academic
 
 @pytest.mark.django_db
 def test_auditor_can_read_but_cannot_mutate_payments(organization, branch, academic_year, student, fee_due):
-    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST)
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST, branch=branch)
     auditor = user_with_role(Role.RoleCode.AUDITOR)
     UserBranchAssignment.objects.create(user=auditor, organization_id=organization.id, branch_id=branch.id)
     payment = create_draft_payment(organization, branch, academic_year, student, fee_due, created_by=receptionist)

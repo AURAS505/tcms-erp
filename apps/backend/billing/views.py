@@ -1,8 +1,9 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 
-from common.permissions import BranchScopedPermission, IsFinancialApprover, IsPaymentDraftCreator
+from common.permissions import BranchScopedPermission, IsFinancialApprover, IsPaymentDraftCreator, user_can_access_branch
 from common.responses import api_success, validation_error_response
 from common.viewsets import BaseModelViewSet, BaseReadOnlyModelViewSet
 
@@ -123,6 +124,9 @@ class StudentPaymentViewSet(BaseReadOnlyModelViewSet):
             return validation_error_response(serializer.errors)
 
         data = serializer.validated_data
+        if not user_can_access_branch(request.user, data["branch"].id, data["organization"].id):
+            raise PermissionDenied("You do not have access to create payments for this branch.")
+
         try:
             payment = StudentPaymentService.create_draft_payment(
                 organization=data["organization"],
@@ -158,8 +162,9 @@ class StudentPaymentViewSet(BaseReadOnlyModelViewSet):
         if not serializer.is_valid():
             return validation_error_response(serializer.errors)
 
+        payment = self.get_object()
         try:
-            payment = StudentPaymentService.approve_payment(payment_id=pk, approved_by=request.user)
+            payment = StudentPaymentService.approve_payment(payment_id=payment.id, approved_by=request.user)
         except DjangoValidationError as exc:
             return validation_error_response(_validation_errors(exc))
 
@@ -174,9 +179,10 @@ class StudentPaymentViewSet(BaseReadOnlyModelViewSet):
         if not serializer.is_valid():
             return validation_error_response(serializer.errors)
 
+        payment = self.get_object()
         try:
             payment = StudentPaymentService.void_payment_placeholder(
-                payment_id=pk,
+                payment_id=payment.id,
                 reason=serializer.validated_data["reason"],
                 voided_by=request.user,
             )

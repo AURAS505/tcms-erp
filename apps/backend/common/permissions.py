@@ -4,6 +4,20 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthentic
 from accounts.models import Role
 
 
+GLOBAL_BRANCH_ROLES = (
+    Role.RoleCode.SUPER_ADMIN,
+    Role.RoleCode.INSTITUTE_OWNER,
+)
+
+BRANCH_SCOPED_ROLES = (
+    Role.RoleCode.BRANCH_ADMIN,
+    Role.RoleCode.ACCOUNTANT,
+    Role.RoleCode.RECEPTIONIST,
+    Role.RoleCode.AUDITOR,
+    Role.RoleCode.TEACHER,
+)
+
+
 def user_has_role(user, role_code_or_name: str) -> bool:
     return user_has_any_role(user, [role_code_or_name])
 
@@ -33,6 +47,29 @@ def user_has_permission_code(user, permission_code: str) -> bool:
         role__permission_assignments__permission__code=permission_code,
         role__permission_assignments__permission__is_active=True,
     ).exists()
+
+
+def user_has_global_branch_access(user) -> bool:
+    if not user or not user.is_authenticated:
+        return False
+    return bool(getattr(user, "is_superuser", False)) or user_has_any_role(user, GLOBAL_BRANCH_ROLES)
+
+
+def get_user_assigned_branch_ids(user):
+    if not user or not user.is_authenticated:
+        return []
+    return list(user.branch_assignments.filter(is_active=True).values_list("branch_id", flat=True))
+
+
+def user_can_access_branch(user, branch_id, organization_id=None) -> bool:
+    if not user or not user.is_authenticated or not branch_id:
+        return False
+    if user_has_global_branch_access(user):
+        return True
+    assignments = user.branch_assignments.filter(branch_id=branch_id, is_active=True)
+    if organization_id is not None:
+        assignments = assignments.filter(organization_id=organization_id)
+    return assignments.exists()
 
 
 class IsSuperAdmin(BasePermission):
@@ -117,18 +154,11 @@ class BranchScopedPermission(BasePermission):
         return bool(request.user and request.user.is_authenticated)
 
     def has_object_permission(self, request, view, obj):
-        user = request.user
-        if getattr(user, "is_superuser", False):
-            return True
         branch_id = getattr(obj, "branch_id", None)
         organization_id = getattr(obj, "organization_id", None)
         if branch_id is None:
             return True
-        return user.branch_assignments.filter(
-            branch_id=branch_id,
-            organization_id=organization_id,
-            is_active=True,
-        ).exists()
+        return user_can_access_branch(request.user, branch_id, organization_id)
 
 
 __all__ = [
@@ -143,6 +173,9 @@ __all__ = [
     "IsPaymentDraftCreator",
     "IsFinancialApprover",
     "BranchScopedPermission",
+    "get_user_assigned_branch_ids",
+    "user_can_access_branch",
+    "user_has_global_branch_access",
     "user_has_role",
     "user_has_any_role",
     "user_has_permission_code",

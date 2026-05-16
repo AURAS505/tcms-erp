@@ -1,7 +1,7 @@
 from rest_framework import filters, viewsets
 
 from common.pagination import StandardResultsSetPagination
-from common.permissions import BranchScopedPermission
+from common.permissions import BranchScopedPermission, get_user_assigned_branch_ids, user_has_global_branch_access
 
 
 class ScopedQuerySetMixin:
@@ -25,10 +25,12 @@ class ScopedQuerySetMixin:
             queryset = queryset.filter(status=status)
 
         user = request.user
-        if user.is_authenticated and not getattr(user, "is_superuser", False) and hasattr(queryset.model, "branch_id"):
-            assigned_branch_ids = list(user.branch_assignments.filter(is_active=True).values_list("branch_id", flat=True))
+        if user.is_authenticated and hasattr(queryset.model, "branch_id") and not user_has_global_branch_access(user):
+            assigned_branch_ids = get_user_assigned_branch_ids(user)
             if assigned_branch_ids:
                 queryset = queryset.filter(branch_id__in=assigned_branch_ids)
+            else:
+                queryset = queryset.none()
         return queryset
 
 
