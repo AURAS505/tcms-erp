@@ -122,21 +122,45 @@ class StudentPaymentService:
     def _normalize_allocations(
         cls, allocations: list[PaymentAllocationInput | dict[str, Any]]
     ) -> list[PaymentAllocationInput]:
-        normalized: list[PaymentAllocationInput] = []
+        normalized_by_target: dict[tuple[str, str], PaymentAllocationInput] = {}
         for item in allocations:
             if isinstance(item, PaymentAllocationInput):
-                normalized.append(item)
-            else:
-                normalized.append(
-                    PaymentAllocationInput(
-                        amount_allocated=quantize_money(item["amount_allocated"]),
-                        fee_due_id=item.get("fee_due_id"),
-                        invoice_id=item.get("invoice_id"),
-                        invoice_item_id=item.get("invoice_item_id"),
-                        notes=item.get("notes", ""),
-                    )
+                allocation = PaymentAllocationInput(
+                    amount_allocated=quantize_money(item.amount_allocated),
+                    fee_due_id=str(item.fee_due_id) if item.fee_due_id else None,
+                    invoice_id=str(item.invoice_id) if item.invoice_id else None,
+                    invoice_item_id=str(item.invoice_item_id) if item.invoice_item_id else None,
+                    notes=item.notes,
                 )
-        return normalized
+            else:
+                allocation = PaymentAllocationInput(
+                    amount_allocated=quantize_money(item["amount_allocated"]),
+                    fee_due_id=str(item["fee_due_id"]) if item.get("fee_due_id") else None,
+                    invoice_id=str(item["invoice_id"]) if item.get("invoice_id") else None,
+                    invoice_item_id=str(item["invoice_item_id"]) if item.get("invoice_item_id") else None,
+                    notes=item.get("notes", ""),
+                )
+
+            targets = [
+                ("fee_due", allocation.fee_due_id),
+                ("invoice", allocation.invoice_id),
+                ("invoice_item", allocation.invoice_item_id),
+            ]
+            populated_targets = [(target_type, target_id) for target_type, target_id in targets if target_id]
+            if len(populated_targets) != 1:
+                raise ValidationError("Each allocation must target exactly one due, invoice, or invoice item.")
+
+            target_key = populated_targets[0]
+            existing = normalized_by_target.get(target_key)
+            if existing is None:
+                normalized_by_target[target_key] = allocation
+                continue
+
+            existing.amount_allocated = quantize_money(existing.amount_allocated + allocation.amount_allocated)
+            if allocation.notes:
+                existing.notes = f"{existing.notes}\n{allocation.notes}".strip()
+
+        return list(normalized_by_target.values())
 
     @classmethod
     def validate_payment_allocations(
@@ -169,8 +193,9 @@ class StudentPaymentService:
             if amount <= ZERO_MONEY:
                 raise ValidationError("Allocation amount must be greater than zero.")
 
-            if not any([item.fee_due_id, item.invoice_id, item.invoice_item_id]):
-                raise ValidationError("Each allocation must target a due, invoice, or invoice item.")
+            target_count = sum(1 for target in (item.fee_due_id, item.invoice_id, item.invoice_item_id) if target)
+            if target_count != 1:
+                raise ValidationError("Each allocation must target exactly one due, invoice, or invoice item.")
 
             total_allocated += amount
 

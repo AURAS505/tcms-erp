@@ -449,7 +449,7 @@ def test_branch_user_cannot_create_multi_allocation_payment_for_other_branch(
 
 
 @pytest.mark.django_db
-def test_duplicate_allocation_target_is_allowed_when_combined_amount_is_within_balance(
+def test_duplicate_due_allocation_inputs_are_normalized_to_one_row(
     maker_client, organization, branch, academic_year, student, fee_due
 ):
     payload = draft_payload(organization, branch, academic_year, student, fee_due, amount="1500.00")
@@ -462,7 +462,64 @@ def test_duplicate_allocation_target_is_allowed_when_combined_amount_is_within_b
 
     assert response.status_code == 201
     payment = StudentPayment.objects.get(id=response.json()["data"]["id"])
-    assert payment.allocations.count() == 2
+    allocation = payment.allocations.get()
+    assert allocation.fee_due_id == fee_due.id
+    assert allocation.amount_allocated == Decimal("1500.00")
+    assert JournalEntry.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_duplicate_invoice_allocation_inputs_are_normalized_to_one_row(
+    maker_client, organization, branch, academic_year, student, fee_due, invoice
+):
+    payload = multi_allocation_payload(organization, branch, academic_year, student, fee_due, invoice, amount="1200.00")
+    payload["allocations"] = [
+        {"invoice": str(invoice.id), "amount_allocated": "700.00"},
+        {"invoice": str(invoice.id), "amount_allocated": "500.00"},
+    ]
+
+    response = maker_client.post("/api/v1/student-payments/create-draft/", payload, format="json")
+
+    assert response.status_code == 201
+    payment = StudentPayment.objects.get(id=response.json()["data"]["id"])
+    allocation = payment.allocations.get()
+    assert allocation.invoice_id == invoice.id
+    assert allocation.amount_allocated == Decimal("1200.00")
+    assert JournalEntry.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_duplicate_due_inputs_reject_combined_amount_above_due_balance(
+    maker_client, organization, branch, academic_year, student, fee_due
+):
+    payload = draft_payload(organization, branch, academic_year, student, fee_due, amount="3000.00")
+    payload["allocations"] = [
+        {"fee_due": str(fee_due.id), "amount_allocated": "2000.00"},
+        {"fee_due": str(fee_due.id), "amount_allocated": "600.00"},
+    ]
+
+    response = maker_client.post("/api/v1/student-payments/create-draft/", payload, format="json")
+
+    assert response.status_code == 400
+    assert StudentPayment.objects.count() == 0
+    assert StudentPaymentAllocation.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_duplicate_inputs_reject_combined_total_above_payment_amount(
+    maker_client, organization, branch, academic_year, student, fee_due
+):
+    payload = draft_payload(organization, branch, academic_year, student, fee_due, amount="1000.00")
+    payload["allocations"] = [
+        {"fee_due": str(fee_due.id), "amount_allocated": "700.00"},
+        {"fee_due": str(fee_due.id), "amount_allocated": "500.00"},
+    ]
+
+    response = maker_client.post("/api/v1/student-payments/create-draft/", payload, format="json")
+
+    assert response.status_code == 400
+    assert StudentPayment.objects.count() == 0
+    assert StudentPaymentAllocation.objects.count() == 0
 
 
 @pytest.mark.django_db
