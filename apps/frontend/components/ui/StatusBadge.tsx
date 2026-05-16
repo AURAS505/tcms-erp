@@ -26,6 +26,7 @@ const statusStyles: Record<string, string> = {
   rejected: "bg-red-50 text-red-700",
   refunded: "bg-indigo-50 text-indigo-700",
   resigned: "bg-orange-50 text-orange-700",
+  reversed: "bg-red-50 text-red-700",
   submitted: "bg-blue-50 text-blue-700",
   terminated: "bg-red-50 text-red-700",
   unpaid: "bg-orange-50 text-orange-700",

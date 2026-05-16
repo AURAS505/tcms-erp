@@ -45,6 +45,13 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Dues" })).toHaveAttribute("href", "/dashboard/billing/dues");
     expect(screen.getByRole("link", { name: "Invoices" })).toHaveAttribute("href", "/dashboard/billing/invoices");
     expect(screen.getByRole("link", { name: "Payments" })).toHaveAttribute("href", "/dashboard/billing/payments");
+    expect(screen.getByRole("link", { name: "Payroll" })).toHaveAttribute("href", "/dashboard/payroll");
+    expect(screen.getByRole("link", { name: "Teacher Earnings" })).toHaveAttribute("href", "/dashboard/payroll/earnings");
+    expect(screen.getByRole("link", { name: "Teacher Payments" })).toHaveAttribute("href", "/dashboard/payroll/payments");
+    expect(screen.getByRole("link", { name: "Payment Batches" })).toHaveAttribute(
+      "href",
+      "/dashboard/payroll/payment-batches",
+    );
     expect(screen.getByText("Admin User")).toBeInTheDocument();
   });
 

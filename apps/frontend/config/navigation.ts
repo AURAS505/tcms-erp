@@ -92,6 +92,26 @@ export const navigationItems: NavItem[] = [
     label: "Payments",
     roles: allRoles,
   },
+  {
+    href: "/dashboard/payroll",
+    label: "Payroll",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/payroll/earnings",
+    label: "Teacher Earnings",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/payroll/payments",
+    label: "Teacher Payments",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/payroll/payment-batches",
+    label: "Payment Batches",
+    roles: allRoles,
+  },
 ];
 
 export function getNavigationForRoles(roles: Role[]) {
