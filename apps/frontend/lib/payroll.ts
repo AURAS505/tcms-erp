@@ -3,9 +3,14 @@ import type { PaginatedResponse } from "@/types/students";
 import type {
   TeacherDeduction,
   TeacherEarning,
+  TeacherEarningApproveInput,
+  TeacherEarningCreateInput,
   TeacherPayment,
+  TeacherPaymentApproveInput,
   TeacherPaymentAllocation,
   TeacherPaymentBatch,
+  TeacherPaymentDraftCreateInput,
+  TeacherPaymentVoidPlaceholderInput,
 } from "@/types/payroll";
 
 const PAYROLL_API_BASE = "/api/v1";
@@ -33,6 +38,27 @@ export function getTeacherEarning(id: string) {
   return apiClient<TeacherEarning>(`${PAYROLL_API_BASE}/teacher-earnings/${id}/`);
 }
 
+export function createManualTeacherEarning(payload: TeacherEarningCreateInput) {
+  return apiClient<TeacherEarning>(`${PAYROLL_API_BASE}/teacher-earnings/create-manual/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function approveTeacherEarning(id: string, payload: TeacherEarningApproveInput = {}) {
+  return apiClient<TeacherEarning>(`${PAYROLL_API_BASE}/teacher-earnings/${id}/approve/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function postTeacherEarning(id: string, payload: TeacherEarningApproveInput = {}) {
+  return apiClient<TeacherEarning>(`${PAYROLL_API_BASE}/teacher-earnings/${id}/post/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listTeacherPaymentBatches(search?: string) {
   return listResource<TeacherPaymentBatch>(buildListPath(`${PAYROLL_API_BASE}/teacher-payment-batches/`, search));
 }
@@ -47,6 +73,34 @@ export function listTeacherPayments(search?: string) {
 
 export function getTeacherPayment(id: string) {
   return apiClient<TeacherPayment>(`${PAYROLL_API_BASE}/teacher-payments/${id}/`);
+}
+
+export function createDraftTeacherPayment(payload: TeacherPaymentDraftCreateInput) {
+  return apiClient<TeacherPayment>(`${PAYROLL_API_BASE}/teacher-payments/create-draft/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function approveTeacherPayment(id: string, payload: TeacherPaymentApproveInput = {}) {
+  return apiClient<TeacherPayment>(`${PAYROLL_API_BASE}/teacher-payments/${id}/approve/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function postTeacherPayment(id: string, payload: TeacherPaymentApproveInput = {}) {
+  return apiClient<TeacherPayment>(`${PAYROLL_API_BASE}/teacher-payments/${id}/post/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function voidTeacherPaymentPlaceholder(id: string, payload: TeacherPaymentVoidPlaceholderInput) {
+  return apiClient<TeacherPayment>(`${PAYROLL_API_BASE}/teacher-payments/${id}/void-placeholder/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listTeacherPaymentAllocations(search?: string) {

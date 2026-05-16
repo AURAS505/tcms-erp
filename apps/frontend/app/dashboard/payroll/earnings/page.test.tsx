@@ -3,10 +3,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import TeacherEarningsPage from "@/app/dashboard/payroll/earnings/page";
+import { useAuth } from "@/hooks/useAuth";
 import { listTeacherEarnings } from "@/lib/payroll";
 
 vi.mock("@/lib/payroll", () => ({
   listTeacherEarnings: vi.fn(),
+}));
+
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: vi.fn(),
 }));
 
 function renderPage() {
@@ -21,6 +26,19 @@ function renderPage() {
 describe("TeacherEarningsPage", () => {
   beforeEach(() => {
     vi.mocked(listTeacherEarnings).mockReset();
+    vi.mocked(useAuth).mockReturnValue({
+      branchAssignments: [],
+      error: null,
+      hasPermission: vi.fn(() => false),
+      hasRole: vi.fn(() => false),
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      permissions: [],
+      refreshSession: vi.fn(),
+      user: null,
+    });
   });
 
   it("renders loading state", () => {
@@ -82,5 +100,57 @@ describe("TeacherEarningsPage", () => {
       "/dashboard/payroll/earnings/earning-1",
     );
     expect(screen.getByText("Student Payment")).toBeInTheDocument();
+  });
+
+  it("shows new earning action for financial approver", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      branchAssignments: [],
+      error: null,
+      hasPermission: vi.fn(() => false),
+      hasRole: vi.fn((role) => role === "accountant"),
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      permissions: [],
+      refreshSession: vi.fn(),
+      user: null,
+    });
+    vi.mocked(listTeacherEarnings).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: /new earning/i })).toHaveAttribute(
+      "href",
+      "/dashboard/payroll/earnings/new",
+    );
+  });
+
+  it("hides mutation action for teacher", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      branchAssignments: [],
+      error: null,
+      hasPermission: vi.fn(() => false),
+      hasRole: vi.fn((role) => role === "teacher"),
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      permissions: [],
+      refreshSession: vi.fn(),
+      user: null,
+    });
+    vi.mocked(listTeacherEarnings).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("No teacher earnings found")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /new earning/i })).not.toBeInTheDocument();
   });
 });

@@ -2,14 +2,20 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getTeacherEarning } from "@/lib/payroll";
+import { useAuth } from "@/hooks/useAuth";
+import { approveTeacherEarning, getTeacherEarning, postTeacherEarning } from "@/lib/payroll";
+import type { Role } from "@/types/auth";
+
+const financialRoles: Role[] = ["super_admin", "institute_owner", "accountant"];
+const immutableStatuses = ["posted", "partial", "paid", "cancelled", "reversed"];
 
 function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
   return (
@@ -29,25 +35,87 @@ const formatLabel = (value?: string) =>
     : "Not set";
 
 export default function TeacherEarningDetailPage({ params }: { params: { id: string } }) {
-  const { data: earning, error, isLoading } = useQuery({
+  const queryClient = useQueryClient();
+  const { hasRole } = useAuth();
+  const canMutate = financialRoles.some((role) => hasRole(role));
+  const { data: earning, error, isLoading, refetch } = useQuery({
     queryKey: ["teacher-earnings", params.id],
     queryFn: () => getTeacherEarning(params.id),
   });
+  const approveMutation = useMutation({
+    mutationFn: () => approveTeacherEarning(params.id),
+    onSuccess: async (updatedEarning) => {
+      queryClient.setQueryData(["teacher-earnings", params.id], updatedEarning);
+      await queryClient.invalidateQueries({ queryKey: ["teacher-earnings"] });
+      await refetch();
+    },
+  });
+  const postMutation = useMutation({
+    mutationFn: () => postTeacherEarning(params.id),
+    onSuccess: async (updatedEarning) => {
+      queryClient.setQueryData(["teacher-earnings", params.id], updatedEarning);
+      await queryClient.invalidateQueries({ queryKey: ["teacher-earnings"] });
+      await refetch();
+    },
+  });
+
+  const canApprove = Boolean(earning && canMutate && ["draft", "pending_approval"].includes(earning.status));
+  const canPost = Boolean(earning && canMutate && earning.status === "approved");
+  const isImmutable = Boolean(earning && immutableStatuses.includes(earning.status));
 
   return (
     <div className="space-y-5">
       <PageHeader
         actions={
-          <Link className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/dashboard/payroll/earnings">
-            Back to earnings
-          </Link>
+          <>
+            {canApprove ? (
+              <Button isLoading={approveMutation.isPending} onClick={() => approveMutation.mutate()} type="button">
+                Approve earning
+              </Button>
+            ) : null}
+            {canPost ? (
+              <Button isLoading={postMutation.isPending} onClick={() => postMutation.mutate()} type="button">
+                Post earning
+              </Button>
+            ) : null}
+            <Link className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/dashboard/payroll/earnings">
+              Back to earnings
+            </Link>
+          </>
         }
-        description="Read-only teacher earning profile. Approval, posting, and payment processing are pending."
+        description="Teacher earning profile. Approval and posting use secured backend payroll workflow APIs."
         title={earning?.period_label || "Teacher earning"}
       />
 
       {isLoading ? <LoadingState label="Loading teacher earning..." /> : null}
       {error ? <ErrorState message={error instanceof Error ? error.message : undefined} /> : null}
+      {approveMutation.isError ? (
+        <ErrorState
+          message={approveMutation.error instanceof Error ? approveMutation.error.message : "Unable to approve teacher earning."}
+          title="Approval failed"
+        />
+      ) : null}
+      {postMutation.isError ? (
+        <ErrorState
+          message={postMutation.error instanceof Error ? postMutation.error.message : "Unable to post teacher earning."}
+          title="Posting failed"
+        />
+      ) : null}
+      {approveMutation.isSuccess ? (
+        <div className="rounded-lg border border-green-100 bg-green-50 p-4 text-sm font-medium text-green-700">
+          Teacher earning approved.
+        </div>
+      ) : null}
+      {postMutation.isSuccess ? (
+        <div className="rounded-lg border border-green-100 bg-green-50 p-4 text-sm font-medium text-green-700">
+          Teacher earning posted.
+        </div>
+      ) : null}
+      {isImmutable ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          This teacher earning is {earning?.status} and is read-only. Changes and accounting entries must use dedicated backend workflows.
+        </div>
+      ) : null}
 
       {earning ? (
         <section className="grid gap-4 lg:grid-cols-3">
@@ -73,7 +141,7 @@ export default function TeacherEarningDetailPage({ params }: { params: { id: str
           <article className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)]">
             <h2 className="text-base font-semibold text-[#262B40]">Accounting Boundary</h2>
             <p className="mt-4 text-sm leading-6 text-slate-700">
-              This view does not approve, post, reverse, pay, or create accounting entries for earnings.
+              The frontend does not calculate ledger effects. Posting sends this earning to the backend workflow, which validates state and posts accounting entries.
             </p>
           </article>
           <article className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)] lg:col-span-3">

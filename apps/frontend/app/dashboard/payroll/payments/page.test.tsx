@@ -3,10 +3,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import TeacherPaymentsPage from "@/app/dashboard/payroll/payments/page";
+import { useAuth } from "@/hooks/useAuth";
 import { listTeacherPayments } from "@/lib/payroll";
 
 vi.mock("@/lib/payroll", () => ({
   listTeacherPayments: vi.fn(),
+}));
+
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: vi.fn(),
 }));
 
 function renderPage() {
@@ -21,6 +26,19 @@ function renderPage() {
 describe("TeacherPaymentsPage", () => {
   beforeEach(() => {
     vi.mocked(listTeacherPayments).mockReset();
+    vi.mocked(useAuth).mockReturnValue({
+      branchAssignments: [],
+      error: null,
+      hasPermission: vi.fn(() => false),
+      hasRole: vi.fn(() => false),
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      permissions: [],
+      refreshSession: vi.fn(),
+      user: null,
+    });
   });
 
   it("renders loading state", () => {
@@ -83,5 +101,57 @@ describe("TeacherPaymentsPage", () => {
       "/dashboard/payroll/payments/payment-1",
     );
     expect(screen.getByText("Posted")).toBeInTheDocument();
+  });
+
+  it("shows new teacher payment action for financial approver", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      branchAssignments: [],
+      error: null,
+      hasPermission: vi.fn(() => false),
+      hasRole: vi.fn((role) => role === "accountant"),
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      permissions: [],
+      refreshSession: vi.fn(),
+      user: null,
+    });
+    vi.mocked(listTeacherPayments).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("link", { name: /new teacher payment/i })).toHaveAttribute(
+      "href",
+      "/dashboard/payroll/payments/new",
+    );
+  });
+
+  it("hides mutation action for receptionist", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      branchAssignments: [],
+      error: null,
+      hasPermission: vi.fn(() => false),
+      hasRole: vi.fn((role) => role === "receptionist"),
+      isAuthenticated: true,
+      isLoading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      permissions: [],
+      refreshSession: vi.fn(),
+      user: null,
+    });
+    vi.mocked(listTeacherPayments).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("No teacher payments found")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /new teacher payment/i })).not.toBeInTheDocument();
   });
 });

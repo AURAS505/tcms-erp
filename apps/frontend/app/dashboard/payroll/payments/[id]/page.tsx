@@ -2,14 +2,20 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { getTeacherPayment } from "@/lib/payroll";
+import { useAuth } from "@/hooks/useAuth";
+import { approveTeacherPayment, getTeacherPayment, postTeacherPayment } from "@/lib/payroll";
+import type { Role } from "@/types/auth";
+
+const financialRoles: Role[] = ["super_admin", "institute_owner", "accountant"];
+const immutableStatuses = ["posted", "voided"];
 
 function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
   return (
@@ -21,25 +27,87 @@ function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
 }
 
 export default function TeacherPaymentDetailPage({ params }: { params: { id: string } }) {
-  const { data: payment, error, isLoading } = useQuery({
+  const queryClient = useQueryClient();
+  const { hasRole } = useAuth();
+  const canMutate = financialRoles.some((role) => hasRole(role));
+  const { data: payment, error, isLoading, refetch } = useQuery({
     queryKey: ["teacher-payments", params.id],
     queryFn: () => getTeacherPayment(params.id),
   });
+  const approveMutation = useMutation({
+    mutationFn: () => approveTeacherPayment(params.id),
+    onSuccess: async (updatedPayment) => {
+      queryClient.setQueryData(["teacher-payments", params.id], updatedPayment);
+      await queryClient.invalidateQueries({ queryKey: ["teacher-payments"] });
+      await refetch();
+    },
+  });
+  const postMutation = useMutation({
+    mutationFn: () => postTeacherPayment(params.id),
+    onSuccess: async (updatedPayment) => {
+      queryClient.setQueryData(["teacher-payments", params.id], updatedPayment);
+      await queryClient.invalidateQueries({ queryKey: ["teacher-payments"] });
+      await refetch();
+    },
+  });
+
+  const canApprove = Boolean(payment && canMutate && ["draft", "submitted"].includes(payment.status));
+  const canPost = Boolean(payment && canMutate && payment.status === "approved");
+  const isImmutable = Boolean(payment && immutableStatuses.includes(payment.status));
 
   return (
     <div className="space-y-5">
       <PageHeader
         actions={
-          <Link className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/dashboard/payroll/payments">
-            Back to teacher payments
-          </Link>
+          <>
+            {canApprove ? (
+              <Button isLoading={approveMutation.isPending} onClick={() => approveMutation.mutate()} type="button">
+                Approve and post
+              </Button>
+            ) : null}
+            {canPost ? (
+              <Button isLoading={postMutation.isPending} onClick={() => postMutation.mutate()} type="button">
+                Post payment
+              </Button>
+            ) : null}
+            <Link className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" href="/dashboard/payroll/payments">
+              Back to teacher payments
+            </Link>
+          </>
         }
-        description="Read-only teacher payment profile. Creation, approval, posting, and void workflows are pending."
+        description="Teacher payment profile. Approval and posting use secured backend payroll workflow APIs."
         title={payment?.voucher_number || payment?.draft_voucher_number || "Teacher payment"}
       />
 
       {isLoading ? <LoadingState label="Loading teacher payment..." /> : null}
       {error ? <ErrorState message={error instanceof Error ? error.message : undefined} /> : null}
+      {approveMutation.isError ? (
+        <ErrorState
+          message={approveMutation.error instanceof Error ? approveMutation.error.message : "Unable to approve teacher payment."}
+          title="Approval failed"
+        />
+      ) : null}
+      {postMutation.isError ? (
+        <ErrorState
+          message={postMutation.error instanceof Error ? postMutation.error.message : "Unable to post teacher payment."}
+          title="Posting failed"
+        />
+      ) : null}
+      {approveMutation.isSuccess ? (
+        <div className="rounded-lg border border-green-100 bg-green-50 p-4 text-sm font-medium text-green-700">
+          Teacher payment approved and posted.
+        </div>
+      ) : null}
+      {postMutation.isSuccess ? (
+        <div className="rounded-lg border border-green-100 bg-green-50 p-4 text-sm font-medium text-green-700">
+          Teacher payment posted.
+        </div>
+      ) : null}
+      {isImmutable ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+          This teacher payment is {payment?.status} and is read-only. Changes, voids, and accounting entries must use dedicated backend workflows.
+        </div>
+      ) : null}
 
       {payment ? (
         <section className="grid gap-4 lg:grid-cols-3">
@@ -65,7 +133,7 @@ export default function TeacherPaymentDetailPage({ params }: { params: { id: str
           <article className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)]">
             <h2 className="text-base font-semibold text-[#262B40]">Accounting Boundary</h2>
             <p className="mt-4 text-sm leading-6 text-slate-700">
-              Payment approval, posting, voiding, allocation edits, and accounting entries are intentionally not available here.
+              The frontend does not calculate ledger effects. Approval and posting send this payment to backend payroll services, which validate allocations and post accounting entries.
             </p>
           </article>
           <article className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)] lg:col-span-3">

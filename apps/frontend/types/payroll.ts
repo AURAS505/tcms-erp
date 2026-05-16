@@ -124,6 +124,57 @@ export interface TeacherDeduction {
   updated_at: string;
 }
 
+export interface TeacherEarningCreateInput {
+  organization: string;
+  branch: string;
+  academic_year: string;
+  teacher: string;
+  earning_date_ad: string;
+  gross_amount: string;
+  deduction_amount?: string;
+  net_amount?: string | null;
+  academic_period?: string | null;
+  earning_date_bs?: string;
+  period_label?: string;
+  earning_source?: string;
+  notes?: string;
+}
+
+export type TeacherEarningApproveInput = Record<string, never>;
+
+export interface TeacherPaymentAllocationInput {
+  teacher_earning: string;
+  amount_allocated: string;
+  notes?: string;
+}
+
+export interface TeacherPaymentDraftCreateInput {
+  organization: string;
+  branch: string;
+  academic_year: string;
+  teacher: string;
+  payment_date_ad: string;
+  payment_method: string;
+  amount: string;
+  deduction_amount?: string;
+  net_paid_amount?: string | null;
+  academic_period?: string | null;
+  payment_batch?: string | null;
+  payment_date_bs?: string;
+  reference_number?: string;
+  acknowledgement_file_path?: string;
+  notes?: string;
+  allocations?: TeacherPaymentAllocationInput[];
+}
+
+export type TeacherPaymentApproveInput = Record<string, never>;
+
+export interface TeacherPaymentVoidPlaceholderInput {
+  reason: string;
+}
+
+export type PayrollActionResult<T> = T;
+
 export type PaginatedTeacherEarnings = PaginatedResponse<TeacherEarning>;
 export type PaginatedTeacherPaymentBatches = PaginatedResponse<TeacherPaymentBatch>;
 export type PaginatedTeacherPayments = PaginatedResponse<TeacherPayment>;
