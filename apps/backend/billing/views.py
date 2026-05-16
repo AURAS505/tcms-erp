@@ -11,6 +11,7 @@ from .models import (
     BillingDiscount,
     BillingFine,
     BillingWaiver,
+    BillStatus,
     FeePlan,
     FeePlanItem,
     StudentAdvanceBalance,
@@ -40,6 +41,8 @@ from .serializers import (
 )
 from .services import StudentPaymentService
 
+OPEN_OBLIGATION_STATUSES = (BillStatus.APPROVED, BillStatus.UNPAID, BillStatus.PARTIAL)
+
 
 def _validation_errors(exc: DjangoValidationError):
     if hasattr(exc, "message_dict"):
@@ -47,6 +50,10 @@ def _validation_errors(exc: DjangoValidationError):
     if hasattr(exc, "messages"):
         return {"non_field_errors": exc.messages}
     return {"non_field_errors": [str(exc)]}
+
+
+def _query_param_is_true(value):
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 class FeePlanViewSet(BaseModelViewSet):
@@ -69,12 +76,36 @@ class StudentFeeDueViewSet(BaseReadOnlyModelViewSet):
     search_fields = ("student__admission_number", "student__full_name", "period_label")
     ordering_fields = ("due_date_ad", "balance_amount", "created_at", "status")
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        student_id = self.request.query_params.get("student")
+        academic_period_id = self.request.query_params.get("academic_period")
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+        if academic_period_id:
+            queryset = queryset.filter(academic_period_id=academic_period_id)
+        if _query_param_is_true(self.request.query_params.get("open_only")):
+            queryset = queryset.filter(status__in=OPEN_OBLIGATION_STATUSES, balance_amount__gt=0)
+        return queryset
+
 
 class StudentInvoiceViewSet(BaseReadOnlyModelViewSet):
     queryset = StudentInvoice.objects.select_related("organization", "branch", "academic_year", "academic_period", "student").all()
     serializer_class = StudentInvoiceSerializer
     search_fields = ("invoice_number", "student__admission_number", "student__full_name")
     ordering_fields = ("invoice_date_ad", "due_date_ad", "balance_amount", "created_at", "status")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        student_id = self.request.query_params.get("student")
+        academic_period_id = self.request.query_params.get("academic_period")
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+        if academic_period_id:
+            queryset = queryset.filter(academic_period_id=academic_period_id)
+        if _query_param_is_true(self.request.query_params.get("open_only")):
+            queryset = queryset.filter(status__in=OPEN_OBLIGATION_STATUSES, balance_amount__gt=0)
+        return queryset
 
 
 class StudentInvoiceItemViewSet(BaseReadOnlyModelViewSet):
