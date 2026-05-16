@@ -23,9 +23,12 @@ from .models import (
     StudentRefund,
 )
 from .serializers import (
+    AdvanceApplicationToDueSerializer,
+    AdvanceApplicationToInvoiceSerializer,
     BillingDiscountSerializer,
     BillingFineSerializer,
     BillingWaiverSerializer,
+    EmptyActionSerializer,
     FeePlanItemSerializer,
     FeePlanSerializer,
     StudentAdvanceBalanceSerializer,
@@ -39,7 +42,7 @@ from .serializers import (
     StudentPaymentVoidPlaceholderSerializer,
     StudentRefundSerializer,
 )
-from .services import StudentPaymentService
+from .services import AdvanceApplicationService, BillingAdjustmentService, StudentPaymentService, StudentRefundService
 
 OPEN_OBLIGATION_STATUSES = (BillStatus.APPROVED, BillStatus.UNPAID, BillStatus.PARTIAL)
 
@@ -239,12 +242,93 @@ class StudentAdvanceBalanceViewSet(BaseReadOnlyModelViewSet):
     search_fields = ("student__admission_number", "student__full_name")
     ordering_fields = ("balance_amount", "created_at")
 
+    def get_permissions(self):
+        if self.action in {"apply_to_due", "apply_to_invoice"}:
+            permission_classes = [BranchScopedPermission, IsFinancialApprover]
+        else:
+            permission_classes = self.permission_classes
+        return [permission() for permission in permission_classes]
+
+    @action(detail=False, methods=["post"], url_path="apply-to-due")
+    def apply_to_due(self, request):
+        serializer = AdvanceApplicationToDueSerializer(data=request.data)
+        if not serializer.is_valid():
+            return validation_error_response(serializer.errors)
+
+        due = serializer.validated_data["due"]
+        if not user_can_access_branch(request.user, due.branch_id, due.organization_id):
+            raise PermissionDenied("You do not have access to apply advances for this branch.")
+
+        try:
+            due = AdvanceApplicationService.apply_advance_to_due(
+                student=serializer.validated_data["student"],
+                due_id=due.id,
+                amount=serializer.validated_data["amount"],
+                applied_by=request.user,
+            )
+        except DjangoValidationError as exc:
+            return validation_error_response(_validation_errors(exc))
+
+        return api_success(
+            StudentFeeDueSerializer(due, context={"request": request}).data,
+            message="Advance applied to due.",
+        )
+
+    @action(detail=False, methods=["post"], url_path="apply-to-invoice")
+    def apply_to_invoice(self, request):
+        serializer = AdvanceApplicationToInvoiceSerializer(data=request.data)
+        if not serializer.is_valid():
+            return validation_error_response(serializer.errors)
+
+        invoice = serializer.validated_data["invoice"]
+        if not user_can_access_branch(request.user, invoice.branch_id, invoice.organization_id):
+            raise PermissionDenied("You do not have access to apply advances for this branch.")
+
+        try:
+            invoice = AdvanceApplicationService.apply_advance_to_invoice(
+                student=serializer.validated_data["student"],
+                invoice_id=invoice.id,
+                amount=serializer.validated_data["amount"],
+                applied_by=request.user,
+            )
+        except DjangoValidationError as exc:
+            return validation_error_response(_validation_errors(exc))
+
+        return api_success(
+            StudentInvoiceSerializer(invoice, context={"request": request}).data,
+            message="Advance applied to invoice.",
+        )
+
 
 class BillingDiscountViewSet(BaseReadOnlyModelViewSet):
     queryset = BillingDiscount.objects.select_related("organization", "branch", "academic_year", "student").all()
     serializer_class = BillingDiscountSerializer
     search_fields = ("student__admission_number", "student__full_name", "discount_type", "reason")
     ordering_fields = ("created_at", "status")
+
+    def get_permissions(self):
+        if self.action == "approve":
+            permission_classes = [BranchScopedPermission, IsFinancialApprover]
+        else:
+            permission_classes = self.permission_classes
+        return [permission() for permission in permission_classes]
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        serializer = EmptyActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return validation_error_response(serializer.errors)
+
+        discount = self.get_object()
+        try:
+            discount = BillingAdjustmentService.approve_discount(discount_id=discount.id, approved_by=request.user)
+        except DjangoValidationError as exc:
+            return validation_error_response(_validation_errors(exc))
+
+        return api_success(
+            BillingDiscountSerializer(discount, context={"request": request}).data,
+            message="Discount approved.",
+        )
 
 
 class BillingWaiverViewSet(BaseReadOnlyModelViewSet):
@@ -253,6 +337,30 @@ class BillingWaiverViewSet(BaseReadOnlyModelViewSet):
     search_fields = ("student__admission_number", "student__full_name", "reason")
     ordering_fields = ("created_at", "status")
 
+    def get_permissions(self):
+        if self.action == "approve":
+            permission_classes = [BranchScopedPermission, IsFinancialApprover]
+        else:
+            permission_classes = self.permission_classes
+        return [permission() for permission in permission_classes]
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        serializer = EmptyActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return validation_error_response(serializer.errors)
+
+        waiver = self.get_object()
+        try:
+            waiver = BillingAdjustmentService.approve_waiver(waiver_id=waiver.id, approved_by=request.user)
+        except DjangoValidationError as exc:
+            return validation_error_response(_validation_errors(exc))
+
+        return api_success(
+            BillingWaiverSerializer(waiver, context={"request": request}).data,
+            message="Waiver approved.",
+        )
+
 
 class BillingFineViewSet(BaseReadOnlyModelViewSet):
     queryset = BillingFine.objects.select_related("organization", "branch", "academic_year", "student").all()
@@ -260,9 +368,74 @@ class BillingFineViewSet(BaseReadOnlyModelViewSet):
     search_fields = ("student__admission_number", "student__full_name", "fine_type", "reason")
     ordering_fields = ("created_at", "status")
 
+    def get_permissions(self):
+        if self.action == "approve":
+            permission_classes = [BranchScopedPermission, IsFinancialApprover]
+        else:
+            permission_classes = self.permission_classes
+        return [permission() for permission in permission_classes]
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        serializer = EmptyActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return validation_error_response(serializer.errors)
+
+        fine = self.get_object()
+        try:
+            fine = BillingAdjustmentService.approve_fine(fine_id=fine.id, approved_by=request.user)
+        except DjangoValidationError as exc:
+            return validation_error_response(_validation_errors(exc))
+
+        return api_success(
+            BillingFineSerializer(fine, context={"request": request}).data,
+            message="Fine approved.",
+        )
+
 
 class StudentRefundViewSet(BaseReadOnlyModelViewSet):
     queryset = StudentRefund.objects.select_related("organization", "branch", "academic_year", "student").all()
     serializer_class = StudentRefundSerializer
     search_fields = ("refund_voucher_number", "student__admission_number", "student__full_name", "refund_reason")
     ordering_fields = ("refund_date_ad", "refund_amount", "created_at", "status")
+
+    def get_permissions(self):
+        if self.action in {"approve", "pay"}:
+            permission_classes = [BranchScopedPermission, IsFinancialApprover]
+        else:
+            permission_classes = self.permission_classes
+        return [permission() for permission in permission_classes]
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        serializer = EmptyActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return validation_error_response(serializer.errors)
+
+        refund = self.get_object()
+        try:
+            refund = StudentRefundService.approve_refund(refund_id=refund.id, approved_by=request.user)
+        except DjangoValidationError as exc:
+            return validation_error_response(_validation_errors(exc))
+
+        return api_success(
+            StudentRefundSerializer(refund, context={"request": request}).data,
+            message="Refund approved.",
+        )
+
+    @action(detail=True, methods=["post"], url_path="pay")
+    def pay(self, request, pk=None):
+        serializer = EmptyActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return validation_error_response(serializer.errors)
+
+        refund = self.get_object()
+        try:
+            refund = StudentRefundService.pay_refund(refund_id=refund.id, paid_by=request.user)
+        except DjangoValidationError as exc:
+            return validation_error_response(_validation_errors(exc))
+
+        return api_success(
+            StudentRefundSerializer(refund, context={"request": request}).data,
+            message="Refund paid.",
+        )

@@ -119,6 +119,22 @@ class StudentPaymentVoidPlaceholderSerializer(serializers.Serializer):
     reason = serializers.CharField()
 
 
+class AdvanceApplicationToDueSerializer(serializers.Serializer):
+    student = serializers.PrimaryKeyRelatedField(queryset=Student.objects.all())
+    due = serializers.PrimaryKeyRelatedField(queryset=StudentFeeDue.objects.all())
+    amount = serializers.DecimalField(max_digits=MONEY_MAX_DIGITS, decimal_places=MONEY_DECIMAL_PLACES)
+
+
+class AdvanceApplicationToInvoiceSerializer(serializers.Serializer):
+    student = serializers.PrimaryKeyRelatedField(queryset=Student.objects.all())
+    invoice = serializers.PrimaryKeyRelatedField(queryset=StudentInvoice.objects.all())
+    amount = serializers.DecimalField(max_digits=MONEY_MAX_DIGITS, decimal_places=MONEY_DECIMAL_PLACES)
+
+
+class EmptyActionSerializer(serializers.Serializer):
+    pass
+
+
 class StudentPaymentAllocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentPaymentAllocation
