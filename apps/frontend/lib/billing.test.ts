@@ -179,4 +179,33 @@ describe("billing API client", () => {
       expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
     );
   });
+
+  it("sends multiple draft payment allocations in backend format", async () => {
+    const fetchMock = mockFetch({ id: "payment-1" });
+
+    await createDraftStudentPayment({
+      organization: "org-1",
+      branch: "branch-1",
+      academic_year: "year-1",
+      student: "student-1",
+      payment_date_ad: "2026-04-15",
+      payment_method: "cash",
+      amount: "800.00",
+      is_advance_payment: false,
+      allocations: [
+        { fee_due: "due-1", amount_allocated: "500.00" },
+        { invoice: "invoice-1", amount_allocated: "300.00" },
+      ],
+    });
+
+    const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/student-payments/create-draft/",
+      expect.objectContaining({ credentials: "include", method: "POST" }),
+    );
+    expect(requestBody.allocations).toEqual([
+      { fee_due: "due-1", amount_allocated: "500.00" },
+      { invoice: "invoice-1", amount_allocated: "300.00" },
+    ]);
+  });
 });

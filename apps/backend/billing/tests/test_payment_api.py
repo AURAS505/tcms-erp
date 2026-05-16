@@ -6,8 +6,9 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from academic.models import AcademicPeriod, AcademicYear
+from accounts.models import Role, UserBranchAssignment, UserRole
 from accounting.models import Account, JournalEntry
-from billing.models import BillStatus, FeePlan, StudentFeeDue, StudentPayment
+from billing.models import BillStatus, FeePlan, StudentFeeDue, StudentInvoice, StudentPayment, StudentPaymentAllocation
 from classes.models import ClassEnrollment, ClassRoom
 from organizations.models import Branch, Organization
 from students.models import Student
@@ -153,6 +154,52 @@ def fee_due(organization, branch, academic_year, academic_period, student, class
 
 
 @pytest.fixture
+def second_fee_due(organization, branch, academic_year, academic_period, student, class_room, enrollment, fee_plan):
+    return StudentFeeDue.objects.create(
+        organization=organization,
+        branch=branch,
+        academic_year=academic_year,
+        academic_period=academic_period,
+        student=student,
+        class_room=class_room,
+        class_enrollment=enrollment,
+        fee_plan=fee_plan,
+        period_label="Bhadra 2081",
+        due_date_ad=date(2024, 8, 20),
+        original_amount=Decimal("1500.00"),
+        discount_amount=Decimal("0.00"),
+        fine_amount=Decimal("0.00"),
+        net_amount=Decimal("1500.00"),
+        paid_amount=Decimal("0.00"),
+        balance_amount=Decimal("1500.00"),
+        status=BillStatus.UNPAID,
+    )
+
+
+@pytest.fixture
+def invoice(organization, branch, academic_year, academic_period, student):
+    return StudentInvoice.objects.create(
+        organization=organization,
+        branch=branch,
+        academic_year=academic_year,
+        academic_period=academic_period,
+        student=student,
+        invoice_number="INV-001",
+        invoice_date_ad=date(2024, 7, 20),
+        invoice_date_bs="",
+        due_date_ad=date(2024, 7, 30),
+        due_date_bs="",
+        subtotal=Decimal("1200.00"),
+        discount_amount=Decimal("0.00"),
+        fine_amount=Decimal("0.00"),
+        total_amount=Decimal("1200.00"),
+        paid_amount=Decimal("0.00"),
+        balance_amount=Decimal("1200.00"),
+        status=BillStatus.UNPAID,
+    )
+
+
+@pytest.fixture
 def accounts(organization):
     Account.objects.create(
         organization=organization,
@@ -209,6 +256,37 @@ def draft_payload(organization, branch, academic_year, student, fee_due, amount=
     }
 
 
+def multi_allocation_payload(organization, branch, academic_year, student, fee_due, invoice, amount="1800.00"):
+    return {
+        "organization": str(organization.id),
+        "branch": str(branch.id),
+        "academic_year": str(academic_year.id),
+        "student": str(student.id),
+        "payment_date_ad": "2024-07-20",
+        "payment_method": StudentPayment.PaymentMethod.CASH,
+        "amount": amount,
+        "allocations": [
+            {"fee_due": str(fee_due.id), "amount_allocated": "1000.00"},
+            {"invoice": str(invoice.id), "amount_allocated": "800.00"},
+        ],
+    }
+
+
+def user_with_role(role_code, *, branch=None):
+    user = get_user_model().objects.create_user(email=f"{role_code}@example.com", password="secure-password")
+    role, _ = Role.objects.get_or_create(code=role_code, defaults={"name": Role.RoleCode(role_code).label})
+    UserRole.objects.create(user=user, role=role)
+    if branch:
+        UserBranchAssignment.objects.create(user=user, organization_id=branch.organization_id, branch_id=branch.id)
+    return user
+
+
+def client_for(user):
+    client = APIClient()
+    client.force_authenticate(user=user)
+    return client
+
+
 @pytest.mark.django_db
 def test_unauthenticated_user_cannot_create_draft_payment(organization, branch, academic_year, student, fee_due):
     response = APIClient().post(
@@ -259,6 +337,132 @@ def test_draft_payment_endpoint_validates_allocation_amount(
 
     assert response.status_code == 400
     assert StudentPayment.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_multi_allocation_draft_payment_creates_allocations_without_posting(
+    maker_client, organization, branch, academic_year, student, fee_due, invoice
+):
+    due_balance_before = fee_due.balance_amount
+    invoice_balance_before = invoice.balance_amount
+
+    response = maker_client.post(
+        "/api/v1/student-payments/create-draft/",
+        multi_allocation_payload(organization, branch, academic_year, student, fee_due, invoice),
+        format="json",
+    )
+
+    assert response.status_code == 201
+    payment = StudentPayment.objects.get(id=response.json()["data"]["id"])
+    allocations = list(payment.allocations.order_by("created_at"))
+    fee_due.refresh_from_db()
+    invoice.refresh_from_db()
+
+    assert payment.status == StudentPayment.Status.DRAFT
+    assert len(allocations) == 2
+    assert allocations[0].fee_due_id == fee_due.id
+    assert allocations[0].amount_allocated == Decimal("1000.00")
+    assert allocations[1].invoice_id == invoice.id
+    assert allocations[1].amount_allocated == Decimal("800.00")
+    assert JournalEntry.objects.count() == 0
+    assert fee_due.balance_amount == due_balance_before
+    assert invoice.balance_amount == invoice_balance_before
+
+
+@pytest.mark.django_db
+def test_multi_allocation_draft_rejects_total_greater_than_payment_amount(
+    maker_client, organization, branch, academic_year, student, fee_due, invoice
+):
+    payload = multi_allocation_payload(organization, branch, academic_year, student, fee_due, invoice, amount="1500.00")
+
+    response = maker_client.post("/api/v1/student-payments/create-draft/", payload, format="json")
+
+    assert response.status_code == 400
+    assert StudentPayment.objects.count() == 0
+    assert StudentPaymentAllocation.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_multi_allocation_draft_rejects_allocation_above_target_balance(
+    maker_client, organization, branch, academic_year, student, fee_due, invoice
+):
+    payload = multi_allocation_payload(organization, branch, academic_year, student, fee_due, invoice, amount="3000.00")
+    payload["allocations"][1]["amount_allocated"] = "1300.00"
+
+    response = maker_client.post("/api/v1/student-payments/create-draft/", payload, format="json")
+
+    assert response.status_code == 400
+    assert StudentPayment.objects.count() == 0
+    assert StudentPaymentAllocation.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_branch_user_cannot_create_multi_allocation_payment_for_other_branch(
+    organization, academic_year, academic_period
+):
+    branch_a = Branch.objects.create(organization=organization, code="A", name="Branch A", is_main_branch=True)
+    branch_b = Branch.objects.create(organization=organization, code="B", name="Branch B")
+    student_b = Student.objects.create(
+        organization=organization,
+        branch=branch_b,
+        academic_year=academic_year,
+        admission_number="ADM-B",
+        full_name="Branch B Student",
+        permanent_address="Kathmandu",
+        status=Student.Status.ACTIVE,
+    )
+    due_b = StudentFeeDue.objects.create(
+        organization=organization,
+        branch=branch_b,
+        academic_year=academic_year,
+        academic_period=academic_period,
+        student=student_b,
+        period_label="Branch B Due",
+        original_amount=Decimal("1000.00"),
+        net_amount=Decimal("1000.00"),
+        balance_amount=Decimal("1000.00"),
+        status=BillStatus.UNPAID,
+    )
+    invoice_b = StudentInvoice.objects.create(
+        organization=organization,
+        branch=branch_b,
+        academic_year=academic_year,
+        academic_period=academic_period,
+        student=student_b,
+        invoice_number="INV-B",
+        invoice_date_ad=date(2024, 7, 20),
+        subtotal=Decimal("1000.00"),
+        total_amount=Decimal("1000.00"),
+        balance_amount=Decimal("1000.00"),
+        status=BillStatus.UNPAID,
+    )
+    receptionist = user_with_role(Role.RoleCode.RECEPTIONIST, branch=branch_a)
+
+    response = client_for(receptionist).post(
+        "/api/v1/student-payments/create-draft/",
+        multi_allocation_payload(organization, branch_b, academic_year, student_b, due_b, invoice_b),
+        format="json",
+    )
+
+    assert response.status_code == 403
+    assert StudentPayment.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_duplicate_allocation_target_is_allowed_when_combined_amount_is_within_balance(
+    maker_client, organization, branch, academic_year, student, fee_due
+):
+    payload = draft_payload(organization, branch, academic_year, student, fee_due, amount="1500.00")
+    payload["allocations"] = [
+        {"fee_due": str(fee_due.id), "amount_allocated": "1000.00"},
+        {"fee_due": str(fee_due.id), "amount_allocated": "500.00"},
+    ]
+
+    response = maker_client.post("/api/v1/student-payments/create-draft/", payload, format="json")
+
+    assert response.status_code == 201
+    payment = StudentPayment.objects.get(id=response.json()["data"]["id"])
+    assert payment.allocations.count() == 2
 
 
 @pytest.mark.django_db
