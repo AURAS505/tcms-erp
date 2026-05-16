@@ -50,7 +50,7 @@ async function fillRequiredPaymentFields() {
 
 async function selectDueAllocation(amount = "500.00") {
   await waitFor(() => expect(listFeeDues).toHaveBeenCalled());
-  await screen.findByRole("option", { name: /Due: Baishakh 2083 - balance 1000.00/i });
+  await screen.findByRole("option", { name: /Due: Baishakh 2083 \(2026-04-30\) - balance 1000.00/i });
   fireEvent.change(screen.getByLabelText(/allocation target/i), { target: { value: "due:due-1" } });
   await waitFor(() => expect(screen.getByLabelText(/allocation amount/i)).not.toBeDisabled());
   fireEvent.change(screen.getByLabelText(/allocation amount/i), { target: { value: amount } });
@@ -196,8 +196,32 @@ describe("NewPaymentPage", () => {
     await fillRequiredPaymentFields();
     await selectDueAllocation();
 
+    expect(listFeeDues).toHaveBeenCalledWith(
+      expect.objectContaining({ student: "student-1", open_only: true, organization: "org-1", branch: "branch-1", academic_year: "year-1" }),
+    );
+    expect(listInvoices).toHaveBeenCalledWith(
+      expect.objectContaining({ student: "student-1", open_only: true, organization: "org-1", branch: "branch-1", academic_year: "year-1" }),
+    );
     expect(screen.getByText(/Selected balance:/i)).toBeInTheDocument();
     expect(screen.getAllByText(/1000.00/i).length).toBeGreaterThan(0);
+  });
+
+  it("shows an empty state when selected student has no backend open obligations", async () => {
+    vi.mocked(listFeeDues).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
+    vi.mocked(listInvoices).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
+    renderPage();
+
+    await fillRequiredPaymentFields();
+
+    expect(await screen.findByText(/no open dues or invoices were found for this student/i)).toBeInTheDocument();
+    expect(listFeeDues).toHaveBeenCalledWith(expect.objectContaining({ student: "student-1", open_only: true }));
+    expect(listInvoices).toHaveBeenCalledWith(expect.objectContaining({ student: "student-1", open_only: true }));
   });
 
   it("prevents allocation amounts greater than the selected balance", async () => {

@@ -15,7 +15,6 @@ import { listStudents } from "@/lib/students";
 import type { StudentFeeDue, StudentInvoice, StudentPaymentAllocationInput, StudentPaymentDraftCreateInput } from "@/types/billing";
 
 const paymentMethods = ["cash", "bank", "online", "cheque", "wallet", "other"];
-const closedStatuses = new Set(["paid", "cancelled", "written_off"]);
 
 type AllocationOption =
   | { kind: "due"; id: string; label: string; balance: number; status: string; source: StudentFeeDue }
@@ -45,16 +44,18 @@ export default function NewPaymentPage() {
     organization: selectedOrganization,
     branch: selectedBranch,
     academic_year: selectedAcademicYear,
+    student: selectedStudent,
+    open_only: true,
   };
   const allocationEnabled = Boolean(selectedStudent) && !isAdvancePayment;
   const feeDues = useQuery({
     enabled: allocationEnabled,
-    queryKey: ["payment-form-fee-dues", allocationFilters],
+    queryKey: ["payment-form-open-fee-dues", allocationFilters],
     queryFn: () => listFeeDues(allocationFilters),
   });
   const invoices = useQuery({
     enabled: allocationEnabled,
-    queryKey: ["payment-form-invoices", allocationFilters],
+    queryKey: ["payment-form-open-invoices", allocationFilters],
     queryFn: () => listInvoices(allocationFilters),
   });
 
@@ -68,28 +69,26 @@ export default function NewPaymentPage() {
   const allAllocationOptions = useMemo<AllocationOption[]>(() => {
     const dueOptions =
       feeDues.data?.data
-        .filter((due) => due.student === selectedStudent && Number(due.balance_amount) > 0 && !closedStatuses.has(due.status))
         .map<AllocationOption>((due) => ({
           kind: "due",
           id: due.id,
-          label: `Due: ${due.period_label || due.id}`,
+          label: `Due: ${due.period_label || due.id}${due.due_date_ad ? ` (${due.due_date_ad})` : ""}`,
           balance: Number(due.balance_amount),
           status: due.status,
           source: due,
         })) ?? [];
     const invoiceOptions =
       invoices.data?.data
-        .filter((invoice) => invoice.student === selectedStudent && Number(invoice.balance_amount) > 0 && !closedStatuses.has(invoice.status))
         .map<AllocationOption>((invoice) => ({
           kind: "invoice",
           id: invoice.id,
-          label: `Invoice: ${invoice.invoice_number || invoice.id}`,
+          label: `Invoice: ${invoice.invoice_number || invoice.id}${invoice.due_date_ad ? ` (${invoice.due_date_ad})` : ""}`,
           balance: Number(invoice.balance_amount),
           status: invoice.status,
           source: invoice,
         })) ?? [];
     return [...dueOptions, ...invoiceOptions];
-  }, [feeDues.data?.data, invoices.data?.data, selectedStudent]);
+  }, [feeDues.data?.data, invoices.data?.data]);
 
   const allocationOptions = useMemo(() => {
     const normalizedSearch = allocationSearch.trim().toLowerCase();
@@ -327,7 +326,7 @@ export default function NewPaymentPage() {
                 <p className="text-sm text-red-700 md:col-span-2">{allocationError instanceof Error ? allocationError.message : "Unable to load allocation targets."}</p>
               ) : null}
               {selectedStudent && !loadingAllocations && !allocationError && allocationOptions.length === 0 ? (
-                <p className="text-sm text-slate-500 md:col-span-2">No open dues or invoices were found for this student in the loaded results.</p>
+                <p className="text-sm text-slate-500 md:col-span-2">No open dues or invoices were found for this student.</p>
               ) : null}
               {selectedAllocation ? (
                 <div className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-600 md:col-span-2">

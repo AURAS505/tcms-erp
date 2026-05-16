@@ -22,7 +22,10 @@ export interface BillingListFilters {
   organization?: string;
   branch?: string;
   academic_year?: string;
+  academic_period?: string;
+  student?: string;
   status?: string;
+  open_only?: boolean | string;
 }
 
 function buildListPath(path: string, filters?: string | BillingListFilters) {
@@ -31,7 +34,7 @@ function buildListPath(path: string, filters?: string | BillingListFilters) {
     if (filters) params.set("search", filters);
   } else if (filters) {
     Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
+      if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
     });
   }
   const query = params.toString();

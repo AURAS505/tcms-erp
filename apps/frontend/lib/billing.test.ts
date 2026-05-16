@@ -99,6 +99,24 @@ describe("billing API client", () => {
     );
   });
 
+  it("passes backend open obligation filters for dues and invoices", async () => {
+    const fetchMock = mockFetch([]);
+
+    await listFeeDues({ student: "student-1", open_only: true, organization: "org-1", branch: "branch-1", academic_year: "year-1" });
+    await listInvoices({ student: "student-1", open_only: true, academic_period: "period-1", status: "partial" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:8000/api/v1/student-fee-dues/?student=student-1&open_only=true&organization=org-1&branch=branch-1&academic_year=year-1",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/v1/student-invoices/?student=student-1&open_only=true&academic_period=period-1&status=partial",
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
   it("calls expected supporting billing endpoints", async () => {
     const fetchMock = mockFetch([]);
 
