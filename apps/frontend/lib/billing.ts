@@ -17,9 +17,23 @@ import type { PaginatedResponse } from "@/types/students";
 
 const BILLING_API_BASE = "/api/v1";
 
-function buildListPath(path: string, search?: string) {
+export interface BillingListFilters {
+  search?: string;
+  organization?: string;
+  branch?: string;
+  academic_year?: string;
+  status?: string;
+}
+
+function buildListPath(path: string, filters?: string | BillingListFilters) {
   const params = new URLSearchParams();
-  if (search) params.set("search", search);
+  if (typeof filters === "string") {
+    if (filters) params.set("search", filters);
+  } else if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+  }
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }
@@ -40,16 +54,16 @@ export function getFeePlan(id: string) {
   return apiClient<FeePlan>(`${BILLING_API_BASE}/fee-plans/${id}/`);
 }
 
-export function listFeeDues(search?: string) {
-  return listResource<StudentFeeDue>(buildListPath(`${BILLING_API_BASE}/student-fee-dues/`, search));
+export function listFeeDues(filters?: string | BillingListFilters) {
+  return listResource<StudentFeeDue>(buildListPath(`${BILLING_API_BASE}/student-fee-dues/`, filters));
 }
 
 export function getFeeDue(id: string) {
   return apiClient<StudentFeeDue>(`${BILLING_API_BASE}/student-fee-dues/${id}/`);
 }
 
-export function listInvoices(search?: string) {
-  return listResource<StudentInvoice>(buildListPath(`${BILLING_API_BASE}/student-invoices/`, search));
+export function listInvoices(filters?: string | BillingListFilters) {
+  return listResource<StudentInvoice>(buildListPath(`${BILLING_API_BASE}/student-invoices/`, filters));
 }
 
 export function getInvoice(id: string) {

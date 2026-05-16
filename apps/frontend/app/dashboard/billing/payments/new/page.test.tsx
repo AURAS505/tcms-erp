@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import NewPaymentPage from "@/app/dashboard/billing/payments/new/page";
-import { createDraftStudentPayment } from "@/lib/billing";
+import { createDraftStudentPayment, listFeeDues, listInvoices } from "@/lib/billing";
 import { listAcademicYears, listBranches, listOrganizations } from "@/lib/lookups";
 import { listStudents } from "@/lib/students";
 
@@ -15,6 +15,8 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/billing", () => ({
   createDraftStudentPayment: vi.fn(),
+  listFeeDues: vi.fn(),
+  listInvoices: vi.fn(),
 }));
 
 vi.mock("@/lib/lookups", () => ({
@@ -36,10 +38,90 @@ function renderPage() {
   );
 }
 
+async function fillRequiredPaymentFields() {
+  await screen.findByRole("option", { name: "TCMS" });
+  fireEvent.change(screen.getByLabelText(/organization/i), { target: { value: "org-1" } });
+  fireEvent.change(screen.getByLabelText(/branch/i), { target: { value: "branch-1" } });
+  fireEvent.change(screen.getByLabelText(/academic year/i), { target: { value: "year-1" } });
+  fireEvent.change(screen.getByLabelText(/student/i), { target: { value: "student-1" } });
+  fireEvent.change(screen.getByLabelText(/payment date/i), { target: { value: "2026-04-15" } });
+  fireEvent.change(screen.getByLabelText(/^amount$/i), { target: { value: "500.00" } });
+}
+
+async function selectDueAllocation(amount = "500.00") {
+  await waitFor(() => expect(listFeeDues).toHaveBeenCalled());
+  await screen.findByRole("option", { name: /Due: Baishakh 2083 - balance 1000.00/i });
+  fireEvent.change(screen.getByLabelText(/allocation target/i), { target: { value: "due:due-1" } });
+  await waitFor(() => expect(screen.getByLabelText(/allocation amount/i)).not.toBeDisabled());
+  fireEvent.change(screen.getByLabelText(/allocation amount/i), { target: { value: amount } });
+}
+
 describe("NewPaymentPage", () => {
   beforeEach(() => {
     push.mockReset();
     vi.mocked(createDraftStudentPayment).mockReset();
+    vi.mocked(listFeeDues).mockResolvedValue({
+      data: [
+        {
+          id: "due-1",
+          organization: "org-1",
+          branch: "branch-1",
+          academic_year: "year-1",
+          academic_period: null,
+          student: "student-1",
+          class_room: null,
+          class_enrollment: null,
+          fee_plan: null,
+          period_label: "Baishakh 2083",
+          due_date_ad: "2026-04-30",
+          due_date_bs: "",
+          original_amount: "1000.00",
+          discount_amount: "0.00",
+          fine_amount: "0.00",
+          net_amount: "1000.00",
+          paid_amount: "0.00",
+          balance_amount: "1000.00",
+          status: "unpaid",
+          approved_by: null,
+          approved_at: null,
+          cancelled_by: null,
+          cancelled_at: null,
+          cancellation_reason: "",
+          notes: "",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+      pagination: { count: 1, page: 1, page_size: 25, next: null, previous: null },
+    });
+    vi.mocked(listInvoices).mockResolvedValue({
+      data: [
+        {
+          id: "invoice-1",
+          organization: "org-1",
+          branch: "branch-1",
+          academic_year: "year-1",
+          academic_period: null,
+          student: "student-1",
+          invoice_number: "INV-001",
+          invoice_date_ad: "2026-04-15",
+          invoice_date_bs: "",
+          due_date_ad: "2026-04-30",
+          due_date_bs: "",
+          subtotal: "1200.00",
+          discount_amount: "0.00",
+          fine_amount: "0.00",
+          total_amount: "1200.00",
+          paid_amount: "200.00",
+          balance_amount: "1000.00",
+          status: "partial",
+          notes: "",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+      pagination: { count: 1, page: 1, page_size: 25, next: null, previous: null },
+    });
     vi.mocked(listOrganizations).mockResolvedValue({
       data: [{ id: "org-1", display_name: "TCMS", legal_name: "TCMS Pvt Ltd", is_active: true }],
       pagination: { count: 1, page: 1, page_size: 25, next: null, previous: null },
@@ -96,9 +178,41 @@ describe("NewPaymentPage", () => {
     expect(await screen.findByRole("heading", { name: "New Payment" })).toBeInTheDocument();
     expect(screen.getByLabelText(/payment date/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^amount$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/allocation target/i)).toBeInTheDocument();
   });
 
-  it("creates draft payment and redirects to detail page", async () => {
+  it("hides allocation picker for advance payments", async () => {
+    renderPage();
+
+    fireEvent.click(await screen.findByLabelText(/advance payment/i));
+
+    expect(screen.queryByLabelText(/allocation target/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/advance payments do not use due or invoice allocations/i)).toBeInTheDocument();
+  });
+
+  it("shows selected due balance in the allocation picker", async () => {
+    renderPage();
+
+    await fillRequiredPaymentFields();
+    await selectDueAllocation();
+
+    expect(screen.getByText(/Selected balance:/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/1000.00/i).length).toBeGreaterThan(0);
+  });
+
+  it("prevents allocation amounts greater than the selected balance", async () => {
+    renderPage();
+
+    await fillRequiredPaymentFields();
+    fireEvent.change(screen.getByLabelText(/^amount$/i), { target: { value: "1500.00" } });
+    await selectDueAllocation("1500.00");
+    fireEvent.click(screen.getByRole("button", { name: /create draft/i }));
+
+    expect(await screen.findByText(/allocation amount cannot exceed the selected balance/i)).toBeInTheDocument();
+    expect(createDraftStudentPayment).not.toHaveBeenCalled();
+  });
+
+  it("creates draft payment with selected due allocation and redirects to detail page", async () => {
     vi.mocked(createDraftStudentPayment).mockResolvedValue({
       id: "payment-1",
       organization: "org-1",
@@ -131,24 +245,16 @@ describe("NewPaymentPage", () => {
     });
     renderPage();
 
-    await screen.findByRole("option", { name: "TCMS" });
-    await screen.findByRole("option", { name: "Main Branch" });
-    await screen.findByRole("option", { name: "2083" });
-    await screen.findByRole("option", { name: "Sita Sharma" });
-    fireEvent.change(await screen.findByLabelText(/organization/i), { target: { value: "org-1" } });
-    fireEvent.change(screen.getByLabelText(/branch/i), { target: { value: "branch-1" } });
-    fireEvent.change(screen.getByLabelText(/academic year/i), { target: { value: "year-1" } });
-    fireEvent.change(screen.getByLabelText(/student/i), { target: { value: "student-1" } });
-    fireEvent.change(screen.getByLabelText(/payment date/i), { target: { value: "2026-04-15" } });
-    fireEvent.change(screen.getByLabelText(/^amount$/i), { target: { value: "500.00" } });
-    fireEvent.click(screen.getByLabelText(/advance payment/i));
+    await fillRequiredPaymentFields();
+    await selectDueAllocation();
     fireEvent.click(screen.getByRole("button", { name: /create draft/i }));
 
     await waitFor(() => expect(createDraftStudentPayment).toHaveBeenCalled());
     expect(vi.mocked(createDraftStudentPayment).mock.calls[0][0]).toEqual(
       expect.objectContaining({
         amount: "500.00",
-        is_advance_payment: true,
+        allocations: [{ fee_due: "due-1", amount_allocated: "500.00" }],
+        is_advance_payment: false,
         organization: "org-1",
         student: "student-1",
       }),

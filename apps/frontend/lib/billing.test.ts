@@ -50,7 +50,7 @@ describe("billing API client", () => {
 
     await listFeePlans("monthly");
     await getFeePlan("plan-1");
-    await listFeeDues();
+    await listFeeDues({ organization: "org-1", branch: "branch-1", academic_year: "year-1" });
     await getFeeDue("due-1");
     await listInvoices("INV");
     await getInvoice("invoice-1");
@@ -69,7 +69,7 @@ describe("billing API client", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      "http://localhost:8000/api/v1/student-fee-dues/",
+      "http://localhost:8000/api/v1/student-fee-dues/?organization=org-1&branch=branch-1&academic_year=year-1",
       expect.objectContaining({ credentials: "include" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
