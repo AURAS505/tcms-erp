@@ -112,6 +112,46 @@ export const navigationItems: NavItem[] = [
     label: "Payment Batches",
     roles: allRoles,
   },
+  {
+    href: "/dashboard/accounting",
+    label: "Accounting",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/accounting/accounts",
+    label: "Chart of Accounts",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/accounting/journal-entries",
+    label: "Journal Entries",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/accounting/documents",
+    label: "Accounting Documents",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/accounting/reports/trial-balance",
+    label: "Trial Balance",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/accounting/reports/general-ledger",
+    label: "General Ledger",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/accounting/reports/profit-loss",
+    label: "Profit & Loss",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/accounting/reports/balance-sheet",
+    label: "Balance Sheet",
+    roles: allRoles,
+  },
 ];
 
 export function getNavigationForRoles(roles: Role[]) {

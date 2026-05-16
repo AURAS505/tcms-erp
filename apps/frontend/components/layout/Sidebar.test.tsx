@@ -52,6 +52,35 @@ describe("Sidebar", () => {
       "href",
       "/dashboard/payroll/payment-batches",
     );
+    expect(screen.getByRole("link", { name: "Accounting" })).toHaveAttribute("href", "/dashboard/accounting");
+    expect(screen.getByRole("link", { name: "Chart of Accounts" })).toHaveAttribute(
+      "href",
+      "/dashboard/accounting/accounts",
+    );
+    expect(screen.getByRole("link", { name: "Journal Entries" })).toHaveAttribute(
+      "href",
+      "/dashboard/accounting/journal-entries",
+    );
+    expect(screen.getByRole("link", { name: "Accounting Documents" })).toHaveAttribute(
+      "href",
+      "/dashboard/accounting/documents",
+    );
+    expect(screen.getByRole("link", { name: "Trial Balance" })).toHaveAttribute(
+      "href",
+      "/dashboard/accounting/reports/trial-balance",
+    );
+    expect(screen.getByRole("link", { name: "General Ledger" })).toHaveAttribute(
+      "href",
+      "/dashboard/accounting/reports/general-ledger",
+    );
+    expect(screen.getByRole("link", { name: "Profit & Loss" })).toHaveAttribute(
+      "href",
+      "/dashboard/accounting/reports/profit-loss",
+    );
+    expect(screen.getByRole("link", { name: "Balance Sheet" })).toHaveAttribute(
+      "href",
+      "/dashboard/accounting/reports/balance-sheet",
+    );
     expect(screen.getByText("Admin User")).toBeInTheDocument();
   });
 
