@@ -131,6 +131,23 @@ def posted_earning(organization, branch, academic_year, teacher):
     )
 
 
+def earning_for_status(organization, branch, academic_year, teacher, status, *, balance="1000.00"):
+    return TeacherEarning.objects.create(
+        organization=organization,
+        branch=branch,
+        academic_year=academic_year,
+        teacher=teacher,
+        earning_source=TeacherEarning.EarningSource.MANUAL_ADJUSTMENT,
+        earning_date_ad=date(2024, 7, 21),
+        gross_amount=Decimal("1000.00"),
+        deduction_amount=Decimal("0.00"),
+        net_amount=Decimal("1000.00"),
+        paid_amount=Decimal("0.00") if Decimal(balance) == Decimal("1000.00") else Decimal("500.00"),
+        balance_amount=Decimal(balance),
+        status=status,
+    )
+
+
 @pytest.mark.django_db
 def test_unauthenticated_user_cannot_call_payroll_mutation(organization, branch, academic_year, teacher):
     response = APIClient().post(
@@ -295,6 +312,41 @@ def test_posted_teacher_payment_cannot_be_patched(organization, branch, academic
     response = client_for(checker).patch(f"/api/v1/teacher-payments/{payment.id}/", {"notes": "changed"}, format="json")
 
     assert response.status_code == 405
+
+
+@pytest.mark.django_db
+def test_teacher_earnings_open_only_filter_returns_posted_partial_positive_balances(
+    organization, branch, academic_year, teacher
+):
+    accountant = user_with_role(Role.RoleCode.ACCOUNTANT, branch=branch)
+    other_teacher = Teacher.objects.create(
+        organization=organization,
+        branch=branch,
+        employee_number="T-002",
+        full_name="Hari Sir",
+        phone="9800000001",
+        status=Teacher.Status.ACTIVE,
+    )
+    posted = earning_for_status(organization, branch, academic_year, teacher, TeacherEarning.Status.POSTED)
+    partial = earning_for_status(organization, branch, academic_year, teacher, TeacherEarning.Status.PARTIAL, balance="500.00")
+    earning_for_status(organization, branch, academic_year, teacher, TeacherEarning.Status.DRAFT)
+    earning_for_status(organization, branch, academic_year, teacher, TeacherEarning.Status.PAID, balance="0.00")
+    earning_for_status(organization, branch, academic_year, other_teacher, TeacherEarning.Status.POSTED)
+
+    response = client_for(accountant).get(
+        "/api/v1/teacher-earnings/",
+        {
+            "organization": str(organization.id),
+            "branch": str(branch.id),
+            "academic_year": str(academic_year.id),
+            "teacher": str(teacher.id),
+            "open_only": "true",
+        },
+    )
+
+    assert response.status_code == 200
+    returned_ids = {item["id"] for item in response.json()["data"]}
+    assert returned_ids == {str(posted.id), str(partial.id)}
 
 
 @pytest.mark.django_db

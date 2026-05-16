@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import NewTeacherPaymentPage from "@/app/dashboard/payroll/payments/new/page";
 import { useAuth } from "@/hooks/useAuth";
 import { listAcademicYears, listBranches, listOrganizations } from "@/lib/lookups";
-import { createDraftTeacherPayment } from "@/lib/payroll";
+import { createDraftTeacherPayment, listTeacherEarnings } from "@/lib/payroll";
 import { listTeachers } from "@/lib/teachers";
 
 const push = vi.fn();
@@ -26,6 +26,7 @@ vi.mock("@/lib/lookups", () => ({
 
 vi.mock("@/lib/payroll", () => ({
   createDraftTeacherPayment: vi.fn(),
+  listTeacherEarnings: vi.fn(),
 }));
 
 vi.mock("@/lib/teachers", () => ({
@@ -65,7 +66,8 @@ async function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/^teacher$/i), { target: { value: "teacher-1" } });
   fireEvent.change(screen.getByLabelText(/payment date/i), { target: { value: "2026-04-15" } });
   fireEvent.change(screen.getByLabelText(/^amount$/i), { target: { value: "500.00" } });
-  fireEvent.change(screen.getByLabelText(/teacher earning id/i), { target: { value: "earning-1" } });
+  await screen.findByRole("button", { name: /select/i });
+  fireEvent.click(screen.getByRole("button", { name: /select/i }));
   fireEvent.change(screen.getByLabelText(/allocation amount/i), { target: { value: "500.00" } });
 }
 
@@ -74,6 +76,40 @@ describe("NewTeacherPaymentPage", () => {
     push.mockReset();
     mockRole("accountant");
     vi.mocked(createDraftTeacherPayment).mockReset();
+    vi.mocked(listTeacherEarnings).mockResolvedValue({
+      data: [
+        {
+          id: "earning-1",
+          organization: "org-1",
+          branch: "branch-1",
+          academic_year: "year-1",
+          academic_period: null,
+          teacher: "teacher-1",
+          student: null,
+          class_room: null,
+          class_enrollment: null,
+          student_payment: null,
+          earning_source: "manual_adjustment",
+          earning_date_ad: "2026-04-10",
+          earning_date_bs: "",
+          period_label: "Baishakh 2083",
+          gross_amount: "1000.00",
+          deduction_amount: "0.00",
+          net_amount: "1000.00",
+          paid_amount: "0.00",
+          balance_amount: "1000.00",
+          status: "posted",
+          created_by: null,
+          approved_by: null,
+          approved_at: null,
+          posted_at: "2026-04-10T00:00:00Z",
+          notes: "",
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+      pagination: { count: 1, page: 1, page_size: 25, next: null, previous: null },
+    });
     vi.mocked(listOrganizations).mockResolvedValue({
       data: [{ id: "org-1", display_name: "TCMS", legal_name: "TCMS Pvt Ltd", is_active: true }],
       pagination: { count: 1, page: 1, page_size: 25, next: null, previous: null },
@@ -124,10 +160,33 @@ describe("NewTeacherPaymentPage", () => {
 
     expect(await screen.findByRole("heading", { name: "New Teacher Payment" })).toBeInTheDocument();
     expect(screen.getByLabelText(/payment date/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/teacher earning id/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/teacher earning id/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/select a teacher to load open earnings/i)).toBeInTheDocument();
   });
 
-  it("submits draft payment payload and redirects", async () => {
+  it("loads open earnings after teacher selection", async () => {
+    renderPage();
+
+    await screen.findByRole("option", { name: "TCMS" });
+    fireEvent.change(screen.getByLabelText(/organization/i), { target: { value: "org-1" } });
+    fireEvent.change(screen.getByLabelText(/^branch$/i), { target: { value: "branch-1" } });
+    fireEvent.change(screen.getByLabelText(/academic year/i), { target: { value: "year-1" } });
+    fireEvent.change(screen.getByLabelText(/^teacher$/i), { target: { value: "teacher-1" } });
+
+    await waitFor(() => expect(listTeacherEarnings).toHaveBeenCalled());
+    expect(listTeacherEarnings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organization: "org-1",
+        branch: "branch-1",
+        academic_year: "year-1",
+        teacher: "teacher-1",
+        open_only: true,
+      }),
+    );
+    expect(await screen.findByText("Baishakh 2083")).toBeInTheDocument();
+  });
+
+  it("selects earning, submits draft payment payload, and redirects", async () => {
     vi.mocked(createDraftTeacherPayment).mockResolvedValue({
       id: "payment-1",
       organization: "org-1",
@@ -176,6 +235,30 @@ describe("NewTeacherPaymentPage", () => {
       }),
     );
     await waitFor(() => expect(push).toHaveBeenCalledWith("/dashboard/payroll/payments/payment-1"));
+  });
+
+  it("blocks allocation amount above selected earning balance", async () => {
+    renderPage();
+
+    await fillRequiredFields();
+    fireEvent.change(screen.getByLabelText(/allocation amount/i), { target: { value: "1500.00" } });
+    fireEvent.click(screen.getByRole("button", { name: /create draft payment/i }));
+
+    expect(await screen.findByText(/allocation amount cannot exceed the selected earning balance/i)).toBeInTheDocument();
+    expect(createDraftTeacherPayment).not.toHaveBeenCalled();
+  });
+
+  it("shows empty state when teacher has no open earnings", async () => {
+    vi.mocked(listTeacherEarnings).mockResolvedValue({
+      data: [],
+      pagination: { count: 0, page: 1, page_size: 25, next: null, previous: null },
+    });
+    renderPage();
+
+    await screen.findByRole("option", { name: "TCMS" });
+    fireEvent.change(screen.getByLabelText(/^teacher$/i), { target: { value: "teacher-1" } });
+
+    expect(await screen.findByText(/no unpaid posted teacher earnings were found/i)).toBeInTheDocument();
   });
 
   it("disables mutation for teacher role", async () => {

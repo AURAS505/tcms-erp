@@ -5,6 +5,7 @@ import type {
   TeacherEarning,
   TeacherEarningApproveInput,
   TeacherEarningCreateInput,
+  TeacherEarningListFilters,
   TeacherPayment,
   TeacherPaymentApproveInput,
   TeacherPaymentAllocation,
@@ -15,9 +16,15 @@ import type {
 
 const PAYROLL_API_BASE = "/api/v1";
 
-function buildListPath(path: string, search?: string) {
+function buildListPath(path: string, filters?: string | TeacherEarningListFilters) {
   const params = new URLSearchParams();
-  if (search) params.set("search", search);
+  if (typeof filters === "string") {
+    if (filters) params.set("search", filters);
+  } else if (filters) {
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+    });
+  }
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }
@@ -30,8 +37,8 @@ async function listResource<T>(path: string): Promise<PaginatedResponse<T>> {
   };
 }
 
-export function listTeacherEarnings(search?: string) {
-  return listResource<TeacherEarning>(buildListPath(`${PAYROLL_API_BASE}/teacher-earnings/`, search));
+export function listTeacherEarnings(filters?: string | TeacherEarningListFilters) {
+  return listResource<TeacherEarning>(buildListPath(`${PAYROLL_API_BASE}/teacher-earnings/`, filters));
 }
 
 export function getTeacherEarning(id: string) {

@@ -105,6 +105,23 @@ describe("payroll API client", () => {
     );
   });
 
+  it("sends teacher earning filter query params", async () => {
+    const fetchMock = mockFetch([]);
+
+    await listTeacherEarnings({
+      organization: "org-1",
+      branch: "branch-1",
+      academic_year: "year-1",
+      teacher: "teacher-1",
+      open_only: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/teacher-earnings/?organization=org-1&branch=branch-1&academic_year=year-1&teacher=teacher-1&open_only=true",
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
   it("calls expected payroll mutation endpoints", async () => {
     const fetchMock = mockFetch({ id: "record-1" });
 

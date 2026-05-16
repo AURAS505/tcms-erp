@@ -30,11 +30,27 @@ def _validation_errors(exc: DjangoValidationError):
     return {"non_field_errors": [str(exc)]}
 
 
+def _query_param_is_true(value):
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 class TeacherEarningViewSet(BaseReadOnlyModelViewSet):
     queryset = TeacherEarning.objects.select_related("organization", "branch", "academic_year", "academic_period", "teacher").all()
     serializer_class = TeacherEarningSerializer
     search_fields = ("teacher__employee_number", "teacher__full_name", "earning_source", "period_label")
     ordering_fields = ("earning_date_ad", "net_amount", "balance_amount", "created_at", "status")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        teacher_id = self.request.query_params.get("teacher")
+        if teacher_id:
+            queryset = queryset.filter(teacher_id=teacher_id)
+        if _query_param_is_true(self.request.query_params.get("open_only")):
+            queryset = queryset.filter(
+                status__in=[TeacherEarning.Status.POSTED, TeacherEarning.Status.PARTIAL],
+                balance_amount__gt=0,
+            )
+        return queryset
 
     def get_permissions(self):
         if self.action in {"create_manual", "approve", "post"}:

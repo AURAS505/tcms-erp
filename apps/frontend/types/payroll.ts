@@ -124,6 +124,16 @@ export interface TeacherDeduction {
   updated_at: string;
 }
 
+export interface TeacherEarningListFilters {
+  search?: string;
+  organization?: string;
+  branch?: string;
+  academic_year?: string;
+  teacher?: string;
+  status?: TeacherEarningStatus | string;
+  open_only?: boolean | string;
+}
+
 export interface TeacherEarningCreateInput {
   organization: string;
   branch: string;
