@@ -24,3 +24,9 @@ Thumbs.db
 celerybeat-schedule
 postgres-data/
 redis-data/
+
+# Local third-party/reference source dumps; keep committed docs under docs/ trackable.
+docs/volt_sample_github/
+docs/*_sample_github/
+docs/local-reference/
+docs/reference-local/
