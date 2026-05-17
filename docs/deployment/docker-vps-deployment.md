@@ -160,6 +160,8 @@ TCMS_ENV_FILE=/srv/tcms-erp/env/production.env \
   docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml build backend frontend
 ```
 
+Docker build contexts are filtered by `.dockerignore` files. Local secrets, virtual environments, caches, `node_modules`, `.next`, SQLite files, media/private media data, backups, Git metadata, and local reference samples must never enter production images. Keep required build inputs such as `requirements.txt`, `package.json`, `package-lock.json`, `manage.py`, and application source available to Docker.
+
 ## Run Migrations
 
 Review first:
