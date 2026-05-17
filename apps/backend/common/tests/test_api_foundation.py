@@ -61,6 +61,17 @@ def test_health_endpoint_still_works(client):
 
 
 @pytest.mark.django_db
+def test_deep_health_endpoint_checks_database(client):
+    response = client.get("/api/health/deep/")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["data"]["checks"]["database"] is True
+    assert payload["meta"]["redis_checked"] is False
+
+
+@pytest.mark.django_db
 def test_api_requires_authentication(client):
     response = client.get("/api/v1/organizations/")
     assert response.status_code in {401, 403}

@@ -92,6 +92,10 @@ Document references are currently metadata-only. Upload endpoints should use the
 
 See `docs/deployment/file-storage-security.md` for the private media design, upload size/extension settings, and S3-compatible storage guidance.
 
+## Monitoring
+
+Logging, health checks, frontend error boundaries, and optional Sentry-compatible environment placeholders are documented in `docs/deployment/monitoring-and-logging.md`.
+
 ## Frontend Variable
 
 Set the frontend API base URL to the deployed backend origin:
@@ -132,6 +136,6 @@ Production startup rejects:
 
 - Authenticated private file download endpoints and signed URL support.
 - MIME signature checks and optional malware scanning for uploaded files.
-- Sentry or equivalent error monitoring.
+- Sentry or equivalent SDK wiring after the production monitoring provider is chosen.
 - Backup automation and restore drills.
 - Optional account lockout, CAPTCHA, or IP reputation controls if operational abuse requires stronger controls.

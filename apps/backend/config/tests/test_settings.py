@@ -53,3 +53,8 @@ def test_security_validation_rejects_unsafe_production_defaults():
             session_cookie_secure=True,
             csrf_cookie_secure=True,
         )
+
+
+def test_logging_config_uses_console_handler(settings):
+    assert settings.LOGGING["handlers"]["console"]["class"] == "logging.StreamHandler"
+    assert settings.LOGGING["root"]["handlers"] == ["console"]
