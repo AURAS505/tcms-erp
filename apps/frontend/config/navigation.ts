@@ -68,6 +68,16 @@ export const navigationItems: NavItem[] = [
     roles: allRoles,
   },
   {
+    href: "/dashboard/academic-years",
+    label: "Academic Years",
+    roles: allRoles,
+  },
+  {
+    href: "/dashboard/academic-rollovers",
+    label: "Academic Rollovers",
+    roles: allRoles,
+  },
+  {
     href: "/dashboard/billing",
     label: "Billing",
     roles: allRoles,
