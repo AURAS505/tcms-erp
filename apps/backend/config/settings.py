@@ -143,6 +143,13 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_PAGINATION_CLASS": "common.pagination.StandardResultsSetPagination",
+    "DEFAULT_THROTTLE_RATES": {
+        "auth_login": os.getenv("DJANGO_THROTTLE_AUTH_LOGIN", "20/min"),
+        "password_reset_request": os.getenv("DJANGO_THROTTLE_PASSWORD_RESET_REQUEST", "5/min"),
+        "password_reset_confirm": os.getenv("DJANGO_THROTTLE_PASSWORD_RESET_CONFIRM", "10/min"),
+        "force_password_change": os.getenv("DJANGO_THROTTLE_FORCE_PASSWORD_CHANGE", "10/min"),
+        "csrf_token": os.getenv("DJANGO_THROTTLE_CSRF_TOKEN", "60/min"),
+    },
     "PAGE_SIZE": 25,
 }
 

@@ -16,6 +16,11 @@ DJANGO_CORS_ALLOW_CREDENTIALS=true
 DJANGO_CSRF_TRUSTED_ORIGINS=https://app.example.com
 DATABASE_URL=postgres://user:password@postgres:5432/tcms_erp
 REDIS_URL=redis://redis:6379/0
+DJANGO_THROTTLE_AUTH_LOGIN=10/min
+DJANGO_THROTTLE_PASSWORD_RESET_REQUEST=3/min
+DJANGO_THROTTLE_PASSWORD_RESET_CONFIRM=5/min
+DJANGO_THROTTLE_FORCE_PASSWORD_CHANGE=5/min
+DJANGO_THROTTLE_CSRF_TOKEN=30/min
 ```
 
 Do not use wildcard CORS origins when credentials are enabled. The backend raises a configuration error if credentials are combined with wildcard origins.
@@ -50,6 +55,30 @@ DJANGO_SECURE_HSTS_PRELOAD=true
 ```
 
 Only enable HSTS preload once every subdomain is ready for HTTPS.
+
+## Authentication Rate Limits
+
+Auth-sensitive endpoints use DRF scoped throttling. Local defaults are intentionally usable for development:
+
+```env
+DJANGO_THROTTLE_AUTH_LOGIN=20/min
+DJANGO_THROTTLE_PASSWORD_RESET_REQUEST=5/min
+DJANGO_THROTTLE_PASSWORD_RESET_CONFIRM=10/min
+DJANGO_THROTTLE_FORCE_PASSWORD_CHANGE=10/min
+DJANGO_THROTTLE_CSRF_TOKEN=60/min
+```
+
+Recommended production starting values are:
+
+```env
+DJANGO_THROTTLE_AUTH_LOGIN=10/min
+DJANGO_THROTTLE_PASSWORD_RESET_REQUEST=3/min
+DJANGO_THROTTLE_PASSWORD_RESET_CONFIRM=5/min
+DJANGO_THROTTLE_FORCE_PASSWORD_CHANGE=5/min
+DJANGO_THROTTLE_CSRF_TOKEN=30/min
+```
+
+Password reset request responses remain generic and do not reveal whether an email exists. Throttled requests return HTTP 429.
 
 ## Frontend Variable
 
@@ -89,7 +118,7 @@ Production startup rejects:
 
 ## Still Pending
 
-- Login and password-reset rate limiting.
 - Private file validation and storage hardening.
 - Sentry or equivalent error monitoring.
 - Backup automation and restore drills.
+- Optional account lockout, CAPTCHA, or IP reputation controls if operational abuse requires stronger controls.

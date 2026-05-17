@@ -3,14 +3,30 @@ from uuid import uuid4
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import override_settings
 from django.utils import timezone
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.test import APIClient
 
 from accounts.models import LoginSession, PasswordResetToken, Permission, Role, RolePermission, UserBranchAssignment, UserRole
 
 
 User = get_user_model()
+
+TEST_THROTTLE_SETTINGS = {
+    "auth_login": "1/min",
+    "password_reset_request": "1/min",
+    "password_reset_confirm": "1/min",
+    "force_password_change": "1/min",
+    "csrf_token": "1/min",
+}
+
+
+@pytest.fixture
+def low_auth_throttle_rates(monkeypatch):
+    cache.clear()
+    monkeypatch.setattr(ScopedRateThrottle, "THROTTLE_RATES", TEST_THROTTLE_SETTINGS)
 
 
 @pytest.fixture
@@ -33,6 +49,17 @@ def test_csrf_endpoint_issues_cookie_and_token():
     assert response.status_code == 200
     assert response.json()["data"]["csrf_token"]
     assert "csrftoken" in response.cookies
+
+
+@pytest.mark.django_db
+def test_csrf_endpoint_throttles_after_configured_limit(low_auth_throttle_rates):
+    client = APIClient()
+
+    allowed = client.get("/api/v1/auth/csrf/")
+    throttled = client.get("/api/v1/auth/csrf/")
+
+    assert allowed.status_code == 200
+    assert throttled.status_code == 429
 
 
 @pytest.mark.django_db
@@ -92,6 +119,25 @@ def test_login_fails_for_inactive_user(user):
 
 
 @pytest.mark.django_db
+def test_login_endpoint_throttles_after_configured_limit(user, low_auth_throttle_rates):
+    client = APIClient()
+
+    allowed = client.post(
+        "/api/v1/auth/login/",
+        {"username_or_email": "authuser", "password": "wrong-password"},
+        format="json",
+    )
+    throttled = client.post(
+        "/api/v1/auth/login/",
+        {"username_or_email": "authuser", "password": "wrong-password"},
+        format="json",
+    )
+
+    assert allowed.status_code == 400
+    assert throttled.status_code == 429
+
+
+@pytest.mark.django_db
 def test_logout_works_for_authenticated_user(user):
     client = APIClient()
     login_response = client.post(
@@ -145,6 +191,18 @@ def test_password_reset_request_always_returns_generic_success(user):
     assert existing_response.status_code == 202
     assert missing_response.status_code == 202
     assert existing_response.json()["message"] == missing_response.json()["message"]
+
+
+@pytest.mark.django_db
+def test_password_reset_request_throttles_and_keeps_generic_response(user, low_auth_throttle_rates):
+    client = APIClient()
+
+    allowed = client.post("/api/v1/auth/password-reset/request/", {"email": "missing@example.com"}, format="json")
+    throttled = client.post("/api/v1/auth/password-reset/request/", {"email": user.email}, format="json")
+
+    assert allowed.status_code == 202
+    assert allowed.json()["message"] == "If the email exists, password reset instructions will be sent."
+    assert throttled.status_code == 429
 
 
 @pytest.mark.django_db
@@ -209,6 +267,25 @@ def test_password_reset_confirm_rejects_invalid_used_and_expired_tokens(user):
 
 
 @pytest.mark.django_db
+def test_password_reset_confirm_throttles_after_configured_limit(low_auth_throttle_rates):
+    client = APIClient()
+
+    allowed = client.post(
+        "/api/v1/auth/password-reset/confirm/",
+        {"token": "invalid-token", "new_password": "NewStrongPass123!"},
+        format="json",
+    )
+    throttled = client.post(
+        "/api/v1/auth/password-reset/confirm/",
+        {"token": "invalid-token", "new_password": "NewStrongPass123!"},
+        format="json",
+    )
+
+    assert allowed.status_code == 400
+    assert throttled.status_code == 429
+
+
+@pytest.mark.django_db
 def test_force_password_change_requires_authentication():
     response = APIClient().post(
         "/api/v1/auth/force-password-change/",
@@ -229,6 +306,26 @@ def test_force_password_change_rejects_wrong_current_password(user):
     )
 
     assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_force_password_change_throttles_after_configured_limit(user, low_auth_throttle_rates):
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    allowed = client.post(
+        "/api/v1/auth/force-password-change/",
+        {"current_password": "wrong-password", "new_password": "NewStrongPass123!"},
+        format="json",
+    )
+    throttled = client.post(
+        "/api/v1/auth/force-password-change/",
+        {"current_password": "wrong-password", "new_password": "NewStrongPass123!"},
+        format="json",
+    )
+
+    assert allowed.status_code == 400
+    assert throttled.status_code == 429
 
 
 @pytest.mark.django_db

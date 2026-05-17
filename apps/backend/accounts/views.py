@@ -9,6 +9,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from common.audit import AuditAction, AuditLogService, AuditModule
@@ -78,6 +79,8 @@ def _revoke_current_login_session(request) -> None:
 class LoginAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth_login"
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -106,6 +109,8 @@ class LoginAPIView(APIView):
 class CsrfTokenAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "csrf_token"
 
     def get(self, request):
         return api_success({"csrf_token": get_token(request)}, message="CSRF token issued.")
@@ -151,6 +156,8 @@ class SessionStatusAPIView(APIView):
 class PasswordResetRequestAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset_request"
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -192,6 +199,8 @@ class PasswordResetRequestAPIView(APIView):
 class PasswordResetConfirmAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset_confirm"
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
@@ -224,6 +233,8 @@ class PasswordResetConfirmAPIView(APIView):
 
 class ForcePasswordChangeAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "force_password_change"
 
     def post(self, request):
         serializer = ForcePasswordChangeSerializer(data=request.data, context={"request": request})
