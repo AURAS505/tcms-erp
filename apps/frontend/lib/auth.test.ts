@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearCsrfTokenCache } from "@/lib/api-client";
 import { authService } from "@/lib/auth";
 
 const backendUser = {
@@ -13,17 +14,23 @@ const backendUser = {
 };
 
 const mockFetch = (data: unknown) => {
-  const fetchMock = vi.fn().mockResolvedValue({
+  const fetchMock = vi.fn((url: string, _init?: RequestInit) => Promise.resolve({
     ok: true,
     status: 200,
-    json: vi.fn().mockResolvedValue({ success: true, data, errors: null, meta: {} }),
-  });
+    json: vi.fn().mockResolvedValue({
+      success: true,
+      data: url.endsWith("/api/v1/auth/csrf/") ? { csrf_token: "csrf-token-1" } : data,
+      errors: null,
+      meta: {},
+    }),
+  }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 };
 
 describe("authService", () => {
   afterEach(() => {
+    clearCsrfTokenCache();
     vi.unstubAllGlobals();
   });
 
@@ -37,9 +44,14 @@ describe("authService", () => {
       expect.objectContaining({
         method: "POST",
         credentials: "include",
+        headers: expect.any(Headers),
         body: JSON.stringify({ username_or_email: "admin@tcms.test", password: "secret" }),
       }),
     );
+    const loginCall = fetchMock.mock.calls.find(([url]) => url === "http://localhost:8000/api/v1/auth/login/");
+    expect(loginCall).toBeDefined();
+    const loginHeaders = loginCall?.[1]?.headers as Headers;
+    expect(loginHeaders.get("X-CSRFToken")).toBe("csrf-token-1");
   });
 
   it("normalizes current user snake_case payload to camelCase", async () => {
@@ -76,16 +88,14 @@ describe("authService", () => {
     await authService.requestPasswordReset({ email: "admin@tcms.test" });
     await authService.confirmPasswordReset({ token: "reset-token", newPassword: "StrongPass123!" });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/auth/password-reset/request/",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ email: "admin@tcms.test" }),
       }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/auth/password-reset/confirm/",
       expect.objectContaining({
         method: "POST",
@@ -94,4 +104,3 @@ describe("authService", () => {
     );
   });
 });
-

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearCsrfTokenCache } from "@/lib/api-client";
 import {
   applyAdvanceToDue,
   applyAdvanceToInvoice,
@@ -25,12 +26,12 @@ import {
 } from "@/lib/billing";
 
 const mockFetch = (data: unknown) => {
-  const fetchMock = vi.fn().mockResolvedValue({
+  const fetchMock = vi.fn((url: string, _init?: RequestInit) => Promise.resolve({
     ok: true,
     status: 200,
     json: vi.fn().mockResolvedValue({
       success: true,
-      data,
+      data: url.endsWith("/api/v1/auth/csrf/") ? { csrf_token: "csrf-token-1" } : data,
       errors: null,
       meta: {
         pagination: {
@@ -42,13 +43,14 @@ const mockFetch = (data: unknown) => {
         },
       },
     }),
-  });
+  }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 };
 
 describe("billing API client", () => {
   afterEach(() => {
+    clearCsrfTokenCache();
     vi.unstubAllGlobals();
   });
 
@@ -175,16 +177,18 @@ describe("billing API client", () => {
     });
     await approveStudentPayment("payment-1");
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/student-payments/create-draft/",
-      expect.objectContaining({ body: expect.any(String), credentials: "include", method: "POST" }),
+      expect.objectContaining({ body: expect.any(String), credentials: "include", headers: expect.any(Headers), method: "POST" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/student-payments/payment-1/approve/",
-      expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
+      expect.objectContaining({ body: "{}", credentials: "include", headers: expect.any(Headers), method: "POST" }),
     );
+    const firstDraftCall = fetchMock.mock.calls.find(([url]) => url === "http://localhost:8000/api/v1/student-payments/create-draft/");
+    expect(firstDraftCall).toBeDefined();
+    const draftHeaders = firstDraftCall?.[1]?.headers as Headers;
+    expect(draftHeaders.get("X-CSRFToken")).toBe("csrf-token-1");
   });
 
   it("calls expected adjustment and refund workflow endpoints", async () => {
@@ -198,38 +202,31 @@ describe("billing API client", () => {
     await approveStudentRefund("refund-1");
     await payStudentRefund("refund-1");
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/student-advance-balances/apply-to-due/",
       expect.objectContaining({ body: JSON.stringify({ student: "student-1", due: "due-1", amount: "100.00" }), credentials: "include", method: "POST" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/student-advance-balances/apply-to-invoice/",
       expect.objectContaining({ body: JSON.stringify({ student: "student-1", invoice: "invoice-1", amount: "200.00" }), credentials: "include", method: "POST" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/billing-discounts/discount-1/approve/",
       expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/billing-waivers/waiver-1/approve/",
       expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/billing-fines/fine-1/approve/",
       expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/student-refunds/refund-1/approve/",
       expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      7,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/student-refunds/refund-1/pay/",
       expect.objectContaining({ body: "{}", credentials: "include", method: "POST" }),
     );
@@ -253,7 +250,9 @@ describe("billing API client", () => {
       ],
     });
 
-    const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    const draftCall = fetchMock.mock.calls.find(([url]) => url === "http://localhost:8000/api/v1/student-payments/create-draft/");
+    expect(draftCall).toBeDefined();
+    const requestBody = JSON.parse(draftCall?.[1]?.body as string);
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/student-payments/create-draft/",
       expect.objectContaining({ credentials: "include", method: "POST" }),

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearCsrfTokenCache } from "@/lib/api-client";
 import {
   approveJournalEntry,
   attachAccountingDocument,
@@ -18,12 +19,12 @@ import {
 } from "@/lib/accounting";
 
 const mockFetch = (data: unknown) => {
-  const fetchMock = vi.fn().mockResolvedValue({
+  const fetchMock = vi.fn((url: string, _init?: RequestInit) => Promise.resolve({
     ok: true,
     status: 200,
     json: vi.fn().mockResolvedValue({
       success: true,
-      data,
+      data: url.endsWith("/api/v1/auth/csrf/") ? { csrf_token: "csrf-token-1" } : data,
       errors: null,
       meta: {
         pagination: {
@@ -35,13 +36,14 @@ const mockFetch = (data: unknown) => {
         },
       },
     }),
-  });
+  }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 };
 
 describe("accounting API client", () => {
   afterEach(() => {
+    clearCsrfTokenCache();
     vi.unstubAllGlobals();
   });
 
@@ -138,31 +140,30 @@ describe("accounting API client", () => {
     await reverseJournalEntry("entry-1", { reversal_date_ad: "2026-04-16", narration: "Reverse entry" });
     await attachAccountingDocument("entry-1", { document_type: "voucher", reference_number: "VCH-001" });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/journal-entries/create-manual/",
-      expect.objectContaining({ method: "POST", body: expect.stringContaining('"lines"') }),
+      expect.objectContaining({ method: "POST", headers: expect.any(Headers), body: expect.stringContaining('"lines"') }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/journal-entries/entry-1/approve/",
       expect.objectContaining({ method: "POST", body: "{}" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/journal-entries/entry-1/post/",
       expect.objectContaining({ method: "POST", body: "{}" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/journal-entries/entry-1/reverse/",
       expect.objectContaining({ method: "POST", body: expect.stringContaining("Reverse entry") }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/journal-entries/entry-1/documents/",
       expect.objectContaining({ method: "POST", body: expect.stringContaining("VCH-001") }),
     );
+    const journalCall = fetchMock.mock.calls.find(([url]) => url === "http://localhost:8000/api/v1/journal-entries/create-manual/");
+    expect(journalCall).toBeDefined();
+    const journalHeaders = journalCall?.[1]?.headers as Headers;
+    expect(journalHeaders.get("X-CSRFToken")).toBe("csrf-token-1");
   });
 
   it("sends source filters when listing journal entries", async () => {

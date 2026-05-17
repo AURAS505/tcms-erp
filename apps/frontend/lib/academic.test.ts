@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearCsrfTokenCache } from "@/lib/api-client";
 import {
   cancelAcademicRollover,
   executeAcademicRollover,
@@ -14,22 +15,25 @@ import {
 } from "@/lib/academic";
 
 const mockFetch = (data: unknown) => {
-  const fetchMock = vi.fn().mockResolvedValue({
+  const fetchMock = vi.fn((url: string, _init?: RequestInit) => Promise.resolve({
     ok: true,
     status: 200,
     json: vi.fn().mockResolvedValue({
       success: true,
-      data,
+      data: url.endsWith("/api/v1/auth/csrf/") ? { csrf_token: "csrf-token-1" } : data,
       errors: null,
       meta: { pagination: { count: Array.isArray(data) ? data.length : 1, page: 1, page_size: 25, next: null, previous: null } },
     }),
-  });
+  }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 };
 
 describe("academic API client", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    clearCsrfTokenCache();
+    vi.unstubAllGlobals();
+  });
 
   it("calls expected academic year and rollover endpoints", async () => {
     const fetchMock = mockFetch([]);
@@ -61,12 +65,16 @@ describe("academic API client", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, "http://localhost:8000/api/v1/academic-years/year-1/", expect.objectContaining({ credentials: "include" }));
     expect(fetchMock).toHaveBeenNthCalledWith(3, "http://localhost:8000/api/v1/academic-year-rollovers/", expect.objectContaining({ credentials: "include" }));
     expect(fetchMock).toHaveBeenNthCalledWith(4, "http://localhost:8000/api/v1/academic-year-rollovers/rollover-1/", expect.objectContaining({ credentials: "include" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(5, "http://localhost:8000/api/v1/academic-year-rollovers/prepare/", expect.objectContaining({ method: "POST", body: expect.stringContaining("close year") }));
-    expect(fetchMock).toHaveBeenNthCalledWith(6, "http://localhost:8000/api/v1/academic-year-rollovers/rollover-1/validate/", expect.objectContaining({ method: "POST", body: "{}" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(7, "http://localhost:8000/api/v1/academic-year-rollovers/rollover-1/execute/", expect.objectContaining({ method: "POST", body: expect.stringContaining("2084") }));
-    expect(fetchMock).toHaveBeenNthCalledWith(8, "http://localhost:8000/api/v1/academic-year-rollovers/rollover-1/cancel/", expect.objectContaining({ method: "POST", body: expect.stringContaining("Not ready") }));
-    expect(fetchMock).toHaveBeenNthCalledWith(9, "http://localhost:8000/api/v1/academic-year-rollovers/rollover-1/summary/", expect.objectContaining({ credentials: "include" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(10, "http://localhost:8000/api/v1/academic-years/year-1/soft-close/", expect.objectContaining({ method: "POST", body: expect.stringContaining("Reviewed") }));
-    expect(fetchMock).toHaveBeenNthCalledWith(11, "http://localhost:8000/api/v1/academic-years/year-1/hard-close/", expect.objectContaining({ method: "POST", body: expect.stringContaining("Final") }));
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/academic-year-rollovers/prepare/", expect.objectContaining({ method: "POST", headers: expect.any(Headers), body: expect.stringContaining("close year") }));
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/academic-year-rollovers/rollover-1/validate/", expect.objectContaining({ method: "POST", body: "{}" }));
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/academic-year-rollovers/rollover-1/execute/", expect.objectContaining({ method: "POST", body: expect.stringContaining("2084") }));
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/academic-year-rollovers/rollover-1/cancel/", expect.objectContaining({ method: "POST", body: expect.stringContaining("Not ready") }));
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/academic-year-rollovers/rollover-1/summary/", expect.objectContaining({ credentials: "include" }));
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/academic-years/year-1/soft-close/", expect.objectContaining({ method: "POST", body: expect.stringContaining("Reviewed") }));
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/academic-years/year-1/hard-close/", expect.objectContaining({ method: "POST", body: expect.stringContaining("Final") }));
+    const prepareCall = fetchMock.mock.calls.find(([url]) => url === "http://localhost:8000/api/v1/academic-year-rollovers/prepare/");
+    expect(prepareCall).toBeDefined();
+    const prepareHeaders = prepareCall?.[1]?.headers as Headers;
+    expect(prepareHeaders.get("X-CSRFToken")).toBe("csrf-token-1");
   });
 });

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearCsrfTokenCache } from "@/lib/api-client";
 import {
   approveTeacherEarning,
   approveTeacherPayment,
@@ -18,12 +19,12 @@ import {
 } from "@/lib/payroll";
 
 const mockFetch = (data: unknown) => {
-  const fetchMock = vi.fn().mockResolvedValue({
+  const fetchMock = vi.fn((url: string, _init?: RequestInit) => Promise.resolve({
     ok: true,
     status: 200,
     json: vi.fn().mockResolvedValue({
       success: true,
-      data,
+      data: url.endsWith("/api/v1/auth/csrf/") ? { csrf_token: "csrf-token-1" } : data,
       errors: null,
       meta: {
         pagination: {
@@ -35,13 +36,14 @@ const mockFetch = (data: unknown) => {
         },
       },
     }),
-  });
+  }));
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 };
 
 describe("payroll API client", () => {
   afterEach(() => {
+    clearCsrfTokenCache();
     vi.unstubAllGlobals();
   });
 
@@ -152,40 +154,37 @@ describe("payroll API client", () => {
     await postTeacherPayment("payment-1");
     await voidTeacherPaymentPlaceholder("payment-1", { reason: "Duplicate draft" });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/teacher-earnings/create-manual/",
-      expect.objectContaining({ method: "POST", body: expect.stringContaining('"gross_amount":"1000.00"') }),
+      expect.objectContaining({ method: "POST", headers: expect.any(Headers), body: expect.stringContaining('"gross_amount":"1000.00"') }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/teacher-earnings/earning-1/approve/",
       expect.objectContaining({ method: "POST", body: "{}" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/teacher-earnings/earning-1/post/",
       expect.objectContaining({ method: "POST", body: "{}" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/teacher-payments/create-draft/",
       expect.objectContaining({ method: "POST", body: expect.stringContaining('"teacher_earning":"earning-2"') }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/teacher-payments/payment-1/approve/",
       expect.objectContaining({ method: "POST", body: "{}" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/teacher-payments/payment-1/post/",
       expect.objectContaining({ method: "POST", body: "{}" }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      7,
+    expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:8000/api/v1/teacher-payments/payment-1/void-placeholder/",
       expect.objectContaining({ method: "POST", body: expect.stringContaining("Duplicate draft") }),
     );
+    const earningCall = fetchMock.mock.calls.find(([url]) => url === "http://localhost:8000/api/v1/teacher-earnings/create-manual/");
+    expect(earningCall).toBeDefined();
+    const earningHeaders = earningCall?.[1]?.headers as Headers;
+    expect(earningHeaders.get("X-CSRFToken")).toBe("csrf-token-1");
   });
 });
