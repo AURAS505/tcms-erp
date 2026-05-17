@@ -48,6 +48,10 @@ Services:
 - PostgreSQL: localhost:5432
 - Redis: localhost:6379
 
+## Production Security
+
+Production cookie, CSRF, CORS, HTTPS, and reverse proxy settings are documented in `docs/deployment/production-security.md`.
+
 ## Source Document Status
 
 No existing project documents, SOP files, old code archives, or requirements files were found in the workspace before this scaffold was created. The master prompt has now been synced into repository documentation:
