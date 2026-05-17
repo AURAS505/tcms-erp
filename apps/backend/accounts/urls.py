@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     CurrentUserAPIView,
+    CsrfTokenAPIView,
     ForcePasswordChangeAPIView,
     LoginAPIView,
     LogoutAPIView,
@@ -12,6 +13,7 @@ from .views import (
 
 
 urlpatterns = [
+    path("csrf/", CsrfTokenAPIView.as_view(), name="auth-csrf"),
     path("login/", LoginAPIView.as_view(), name="auth-login"),
     path("logout/", LogoutAPIView.as_view(), name="auth-logout"),
     path("me/", CurrentUserAPIView.as_view(), name="auth-me"),

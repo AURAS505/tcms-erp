@@ -7,7 +7,13 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
-from common.permissions import BranchScopedPermission, IsFinancialApprover, user_can_access_branch
+from common.permissions import (
+    BranchScopedPermission,
+    IsFinancialApprover,
+    get_user_assigned_branch_ids,
+    user_can_access_branch,
+    user_has_global_branch_access,
+)
 from common.responses import api_success, validation_error_response
 from common.viewsets import BaseReadOnlyModelViewSet
 from organizations.models import Organization
@@ -208,7 +214,21 @@ class ReportAPIView(APIView):
         from organizations.models import Branch
 
         organization = get_object_or_404(Organization, id=request.query_params.get("organization"))
-        branch = Branch.objects.filter(id=request.query_params.get("branch")).first() if request.query_params.get("branch") else None
+        branch = None
+        branch_id = request.query_params.get("branch")
+        if branch_id:
+            branch = get_object_or_404(Branch, id=branch_id, organization=organization)
+            if not user_can_access_branch(request.user, branch.id, organization.id):
+                raise PermissionDenied("You do not have access to reports for this branch.")
+        elif not user_has_global_branch_access(request.user):
+            assigned_branch_ids = get_user_assigned_branch_ids(request.user)
+            assigned_branches = Branch.objects.filter(id__in=assigned_branch_ids, organization=organization)
+            assigned_count = assigned_branches.count()
+            if assigned_count == 0:
+                raise PermissionDenied("You do not have access to reports for this organization.")
+            if assigned_count > 1:
+                raise PermissionDenied("Branch-scoped report access requires a branch filter.")
+            branch = assigned_branches.get()
         academic_year = (
             AcademicYear.objects.filter(id=request.query_params.get("academic_year")).first()
             if request.query_params.get("academic_year")

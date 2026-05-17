@@ -3,7 +3,10 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth import get_user_model, login, logout, update_session_auth_hash
 from django.db import transaction
+from django.middleware.csrf import get_token
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
@@ -97,6 +100,15 @@ class LoginAPIView(APIView):
         )
 
         return api_success(CurrentUserSerializer(user).data, message="Login successful")
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class CsrfTokenAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return api_success({"csrf_token": get_token(request)}, message="CSRF token issued.")
 
 
 class LogoutAPIView(APIView):

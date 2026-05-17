@@ -25,6 +25,17 @@ def user():
 
 
 @pytest.mark.django_db
+def test_csrf_endpoint_issues_cookie_and_token():
+    client = APIClient()
+
+    response = client.get("/api/v1/auth/csrf/")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["csrf_token"]
+    assert "csrftoken" in response.cookies
+
+
+@pytest.mark.django_db
 def test_login_succeeds_with_valid_username(user):
     client = APIClient()
     response = client.post(
