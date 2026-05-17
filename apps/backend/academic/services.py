@@ -358,6 +358,49 @@ class AcademicYearRolloverService:
         return year
 
     @staticmethod
+    @transaction.atomic
+    def soft_close_academic_year(*, academic_year_id, closed_by=None, reason: str = "") -> AcademicYear:
+        year = AcademicYear.objects.select_for_update().get(id=academic_year_id)
+        if year.status == AcademicYear.Status.HARD_CLOSED:
+            raise ValidationError("Hard-closed academic years cannot be soft closed.")
+        year.status = AcademicYear.Status.SOFT_CLOSED
+        year.is_active = False
+        year._allow_hard_closed_update = True
+        year.save(update_fields=["status", "is_active", "updated_at"])
+        AuditLogService.record(
+            action=AuditAction.SYSTEM,
+            module=AuditModule.ACADEMIC,
+            obj=year,
+            user=closed_by,
+            metadata={"event": "academic_year_soft_closed", "reason": reason, "source": "api"},
+        )
+        return year
+
+    @staticmethod
+    @transaction.atomic
+    def hard_close_academic_year(*, academic_year_id, closed_by=None, reason: str = "") -> AcademicYear:
+        year = AcademicYear.objects.select_for_update().get(id=academic_year_id)
+        if year.status == AcademicYear.Status.HARD_CLOSED:
+            return year
+        year.status = AcademicYear.Status.HARD_CLOSED
+        year.is_active = False
+        year._allow_hard_closed_update = True
+        year.save(update_fields=["status", "is_active", "updated_at"])
+        for period in year.periods.exclude(status=AcademicPeriod.Status.HARD_CLOSED):
+            period.status = AcademicPeriod.Status.HARD_CLOSED
+            period.is_active = False
+            period._allow_hard_closed_update = True
+            period.save(update_fields=["status", "is_active", "updated_at"])
+        AuditLogService.record(
+            action=AuditAction.SYSTEM,
+            module=AuditModule.ACADEMIC,
+            obj=year,
+            user=closed_by,
+            metadata={"event": "academic_year_hard_closed", "reason": reason, "source": "api"},
+        )
+        return year
+
+    @staticmethod
     def activate_new_year(*, rollover: AcademicYearRollover, activated_by=None) -> AcademicYear:
         AcademicYear.objects.filter(organization=rollover.organization).exclude(id=rollover.to_academic_year_id).update(is_active=False)
         year = rollover.to_academic_year
