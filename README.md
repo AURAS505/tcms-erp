@@ -53,6 +53,7 @@ Services:
 Deployment documentation is indexed in `docs/deployment/README.md`.
 
 - Production cookie, CSRF, CORS, HTTPS, and reverse proxy settings: `docs/deployment/production-security.md`
+- Docker VPS deployment guide: `docs/deployment/docker-vps-deployment.md`
 - Private file validation and storage guidance: `docs/deployment/file-storage-security.md`
 - Monitoring, logging, health checks, and error tracking readiness: `docs/deployment/monitoring-and-logging.md`
 - Backup automation and restore drills: `docs/deployment/backup-and-restore.md`
