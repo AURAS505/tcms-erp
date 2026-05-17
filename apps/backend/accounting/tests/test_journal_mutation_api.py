@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 
 from academic.models import AcademicYear
 from accounts.models import Role, UserBranchAssignment, UserRole
-from accounting.models import AccountingDocument, JournalEntry
+from accounting.models import AccountingDocument, JournalEntry, JournalEntryLine
 from accounting.reports import FinancialReportFilters, GeneralLedgerReportService
 from common.models import AuditLog
 
@@ -240,3 +240,72 @@ def test_document_reference_can_be_attached_to_journal(organization, branch, aca
     assert response.status_code == 201
     assert response.json()["data"]["journal_entry"] == journal_id
     assert AccountingDocument.objects.filter(journal_entry_id=journal_id, reference_number="VCH-001").exists()
+
+
+@pytest.mark.django_db
+def test_journal_entries_can_be_filtered_by_source_fields(organization, branch, academic_year, accounts):
+    super_admin = user_with_role(Role.RoleCode.SUPER_ADMIN, email_prefix="source-filter-super")
+    rollover_id = academic_year.id
+    matching = JournalEntry.objects.create(
+        organization=organization,
+        branch=branch,
+        academic_year=academic_year,
+        entry_number="JV-ROLLOVER-1",
+        entry_date_ad="2024-07-20",
+        entry_date_bs="2081-04-05",
+        description="Rollover closing entry",
+        status=JournalEntry.Status.APPROVED,
+        source_type=JournalEntry.SourceType.SYSTEM,
+        source_app="academic",
+        source_model="AcademicYearRollover",
+        source_object_id=rollover_id,
+        source_number="closing-revenue",
+        is_system_generated=True,
+    )
+    JournalEntryLine.objects.create(
+        journal_entry=matching,
+        organization=organization,
+        branch=branch,
+        account=accounts["4100"],
+        debit_amount=Decimal("100.00"),
+        credit_amount=Decimal("0.00"),
+    )
+    JournalEntryLine.objects.create(
+        journal_entry=matching,
+        organization=organization,
+        branch=branch,
+        account=accounts["3100"],
+        debit_amount=Decimal("0.00"),
+        credit_amount=Decimal("100.00"),
+    )
+    JournalEntry.objects.create(
+        organization=organization,
+        branch=branch,
+        academic_year=academic_year,
+        entry_number="JV-OTHER-1",
+        entry_date_ad="2024-07-20",
+        entry_date_bs="2081-04-05",
+        description="Other system entry",
+        status=JournalEntry.Status.APPROVED,
+        source_type=JournalEntry.SourceType.SYSTEM,
+        source_app="payroll",
+        source_model="TeacherPayment",
+        source_object_id=rollover_id,
+        source_number="payment",
+        is_system_generated=True,
+    )
+
+    response = client_for(super_admin).get(
+        "/api/v1/journal-entries/",
+        {
+            "source_app": "academic",
+            "source_model": "AcademicYearRollover",
+            "source_object_id": str(rollover_id),
+            "source_type": JournalEntry.SourceType.SYSTEM,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [entry["id"] for entry in response.json()["data"]] == [str(matching.id)]
+    assert response.json()["data"][0]["debit_total"] == "100.00"
+    assert response.json()["data"][0]["credit_total"] == "100.00"

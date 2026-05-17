@@ -7,6 +7,7 @@ import type {
   BalanceSheetReport,
   GeneralLedgerReport,
   JournalEntry,
+  JournalEntryListFilters,
   JournalEntryLine,
   JournalReverseInput,
   ManualJournalCreateInput,
@@ -20,6 +21,16 @@ const ACCOUNTING_API_BASE = "/api/v1";
 function buildListPath(path: string, search?: string) {
   const params = new URLSearchParams();
   if (search) params.set("search", search);
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+function buildFilteredListPath(path: string, filters: JournalEntryListFilters = {}) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    params.set(key, value);
+  });
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }
@@ -50,8 +61,12 @@ export function getAccount(id: string) {
   return apiClient<Account>(`${ACCOUNTING_API_BASE}/accounts/${id}/`);
 }
 
-export function listJournalEntries(search?: string) {
-  return listResource<JournalEntry>(buildListPath(`${ACCOUNTING_API_BASE}/journal-entries/`, search));
+export function listJournalEntries(filters?: string | JournalEntryListFilters) {
+  const path =
+    typeof filters === "string"
+      ? buildListPath(`${ACCOUNTING_API_BASE}/journal-entries/`, filters)
+      : buildFilteredListPath(`${ACCOUNTING_API_BASE}/journal-entries/`, filters);
+  return listResource<JournalEntry>(path);
 }
 
 export function getJournalEntry(id: string) {

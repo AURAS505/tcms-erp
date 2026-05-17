@@ -7,14 +7,24 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
+import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SimpleTable } from "@/components/ui/SimpleTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TextInput } from "@/components/ui/TextInput";
 import { useAuth } from "@/hooks/useAuth";
 import { cancelAcademicRollover, executeAcademicRollover, getAcademicRollover, getAcademicRolloverSummary, validateAcademicRollover } from "@/lib/academic";
+import { listJournalEntries } from "@/lib/accounting";
+import type { JournalEntry } from "@/types/accounting";
 import type { Role } from "@/types/auth";
 
 const rolloverRoles: Role[] = ["super_admin", "institute_owner", "accountant"];
+
+function rolloverJournalKind(entry: JournalEntry) {
+  if (entry.source_number.startsWith("opening")) return "Opening";
+  if (entry.source_number.startsWith("closing")) return "Closing";
+  return "Rollover";
+}
 
 export default function AcademicRolloverDetailPage({ params }: { params: { id: string } }) {
   const queryClient = useQueryClient();
@@ -28,9 +38,20 @@ export default function AcademicRolloverDetailPage({ params }: { params: { id: s
     queryKey: ["academic-rollovers", params.id, "summary"],
     queryFn: () => getAcademicRolloverSummary(params.id),
   });
+  const generatedJournals = useQuery({
+    queryKey: ["academic-rollovers", params.id, "generated-journals"],
+    queryFn: () =>
+      listJournalEntries({
+        source_app: "academic",
+        source_model: "AcademicYearRollover",
+        source_object_id: params.id,
+        source_type: "system",
+      }),
+  });
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["academic-rollovers", params.id] });
     void queryClient.invalidateQueries({ queryKey: ["academic-rollovers", params.id, "summary"] });
+    void queryClient.invalidateQueries({ queryKey: ["academic-rollovers", params.id, "generated-journals"] });
   };
   const validateMutation = useMutation({ mutationFn: () => validateAcademicRollover(params.id), onSuccess: refresh });
   const cancelMutation = useMutation({ mutationFn: () => cancelAcademicRollover(params.id, { reason: "Cancelled from dashboard" }), onSuccess: refresh });
@@ -127,6 +148,39 @@ export default function AcademicRolloverDetailPage({ params }: { params: { id: s
               <Button isLoading={executeMutation.isPending} type="submit">Execute rollover</Button>
             </form>
           ) : null}
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-base font-semibold text-[#262B40]">Generated Journal Entries</h2>
+              <p className="mt-1 text-sm text-slate-500">Read-only closing and opening entries linked to this rollover.</p>
+            </div>
+            {generatedJournals.isLoading ? <LoadingState label="Loading generated journals..." /> : null}
+            {generatedJournals.isError ? <ErrorState message={generatedJournals.error instanceof Error ? generatedJournals.error.message : undefined} /> : null}
+            {generatedJournals.data && generatedJournals.data.data.length > 0 ? (
+              <SimpleTable
+                columns={[
+                  {
+                    header: "Entry",
+                    render: (entry) => (
+                      <Link className="font-semibold text-[#2563EB] hover:underline" href={`/dashboard/accounting/journal-entries/${entry.id}`}>
+                        {entry.entry_number}
+                      </Link>
+                    ),
+                  },
+                  { header: "Type", render: (entry) => rolloverJournalKind(entry) },
+                  { header: "Date", render: (entry) => entry.entry_date_ad },
+                  { header: "Status", render: (entry) => <StatusBadge status={entry.status} /> },
+                  { header: "Description", render: (entry) => entry.description || entry.narration || "Not set" },
+                  { header: "Debit", render: (entry) => <MoneyDisplay amount={entry.debit_total ?? "0.00"} /> },
+                  { header: "Credit", render: (entry) => <MoneyDisplay amount={entry.credit_total ?? "0.00"} /> },
+                ]}
+                getRowKey={(entry) => entry.id}
+                rows={generatedJournals.data.data}
+              />
+            ) : null}
+            {generatedJournals.data && generatedJournals.data.data.length === 0 ? (
+              <EmptyState title="No generated journal entries found" />
+            ) : null}
+          </section>
         </>
       ) : null}
       {!isLoading && !error && !rollover ? <EmptyState title="Rollover not found" /> : null}

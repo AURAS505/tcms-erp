@@ -164,4 +164,20 @@ describe("accounting API client", () => {
       expect.objectContaining({ method: "POST", body: expect.stringContaining("VCH-001") }),
     );
   });
+
+  it("sends source filters when listing journal entries", async () => {
+    const fetchMock = mockFetch([]);
+
+    await listJournalEntries({
+      source_app: "academic",
+      source_model: "AcademicYearRollover",
+      source_object_id: "rollover-1",
+      source_type: "system",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/journal-entries/?source_app=academic&source_model=AcademicYearRollover&source_object_id=rollover-1&source_type=system",
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
 });

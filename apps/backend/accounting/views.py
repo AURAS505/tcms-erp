@@ -49,10 +49,20 @@ class AccountViewSet(BaseReadOnlyModelViewSet):
 
 
 class JournalEntryViewSet(BaseReadOnlyModelViewSet):
-    queryset = JournalEntry.objects.select_related("organization", "branch", "academic_year", "academic_period").all()
+    queryset = JournalEntry.objects.select_related("organization", "branch", "academic_year", "academic_period").prefetch_related("lines").all()
     serializer_class = JournalEntrySerializer
     search_fields = ("entry_number", "description", "narration", "source_app", "source_model", "source_number")
     ordering_fields = ("entry_date_ad", "posting_date_ad", "created_at", "status")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        source_filters = {
+            "source_app": self.request.query_params.get("source_app"),
+            "source_model": self.request.query_params.get("source_model"),
+            "source_object_id": self.request.query_params.get("source_object_id"),
+            "source_type": self.request.query_params.get("source_type"),
+        }
+        return queryset.filter(**{key: value for key, value in source_filters.items() if value})
 
     def get_permissions(self):
         if self.action in {"create_manual", "approve", "post", "reverse", "documents"}:

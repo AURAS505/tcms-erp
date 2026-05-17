@@ -47,6 +47,8 @@ export interface JournalEntry {
   source_object_id: string | null;
   source_number: string;
   status: JournalEntryStatus;
+  debit_total?: string;
+  credit_total?: string;
   is_system_generated: boolean;
   created_by: string | null;
   approved_by: string | null;
@@ -169,6 +171,18 @@ export interface AccountingReportFilters {
   date_to?: string | null;
   account?: string | null;
   include_zero_balances?: boolean;
+}
+
+export interface JournalEntryListFilters {
+  search?: string;
+  organization?: string | null;
+  branch?: string | null;
+  academic_year?: string | null;
+  status?: string | null;
+  source_app?: string | null;
+  source_model?: string | null;
+  source_object_id?: string | null;
+  source_type?: string | null;
 }
 
 export interface ManualJournalLineInput {

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from academic.models import AcademicPeriod, AcademicYear
@@ -14,10 +16,19 @@ class AccountSerializer(serializers.ModelSerializer):
 
 
 class JournalEntrySerializer(serializers.ModelSerializer):
+    debit_total = serializers.SerializerMethodField()
+    credit_total = serializers.SerializerMethodField()
+
     class Meta:
         model = JournalEntry
         fields = "__all__"
         read_only_fields = ("id", "created_at", "updated_at")
+
+    def get_debit_total(self, obj):
+        return f"{sum((line.debit_amount for line in obj.lines.all()), Decimal('0.00')):.2f}"
+
+    def get_credit_total(self, obj):
+        return f"{sum((line.credit_amount for line in obj.lines.all()), Decimal('0.00')):.2f}"
 
 
 class ManualJournalLineSerializer(serializers.Serializer):
