@@ -1,18 +1,16 @@
 # TCMS ERP
 
-TCMS ERP is planned as an enterprise-grade education management system for schools, colleges, coaching institutes, tuition centers, and multi-branch education businesses.
+TCMS ERP is an enterprise-grade education management system for schools, colleges, coaching institutes, tuition centers, and multi-branch education businesses.
 
-This repository currently contains Step 1 only: monorepo foundation, Docker local development services, backend skeleton, frontend skeleton, environment sample, and initial documentation.
+This repository contains the current TCMS ERP implementation, including backend APIs, frontend dashboard workflows, financial controls, deployment templates, and operational documentation.
 
 ## Current Scope
 
-- Monorepo structure under `tcms-erp/`
-- Django REST Framework backend skeleton
-- Next.js TypeScript frontend skeleton
-- PostgreSQL, Redis, Celery worker, and Celery beat in Docker Compose
-- Initial docs for architecture, API conventions, accounting principles, and local development
-
-Business modules, database models, accounting posting logic, permissions, financial workflows, and production migrations are intentionally not implemented in Step 1.
+- Django REST Framework backend modules for accounts, organizations, academic years, students, guardians, teachers, classes, billing, payroll, accounting, reports, audit logs, and operational health.
+- Next.js TypeScript dashboard with authenticated workflows for core academic, billing, payroll, accounting, reporting, and rollover views.
+- Service-backed financial mutation APIs with branch scope, maker-checker controls, audit logging, immutability, and accounting posting protections.
+- PostgreSQL, Redis, Celery worker, Celery beat, local Docker Compose, production Compose template, optimized production Dockerfiles, and deployment SOPs.
+- Documentation for requirements, architecture, accounting principles, security, backup/restore, monitoring, go-live, rollback, and production deployment.
 
 ## Repository Layout
 
