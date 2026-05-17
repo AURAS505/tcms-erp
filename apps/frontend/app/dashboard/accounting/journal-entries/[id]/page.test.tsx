@@ -4,7 +4,14 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import JournalEntryDetailPage from "@/app/dashboard/accounting/journal-entries/[id]/page";
 import { useAuth } from "@/hooks/useAuth";
-import { approveJournalEntry, getJournalEntry, listJournalEntryLines, postJournalEntry, reverseJournalEntry } from "@/lib/accounting";
+import {
+  approveJournalEntry,
+  attachAccountingDocument,
+  getJournalEntry,
+  listJournalEntryLines,
+  postJournalEntry,
+  reverseJournalEntry,
+} from "@/lib/accounting";
 import type { JournalEntry } from "@/types/accounting";
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -13,6 +20,7 @@ vi.mock("@/hooks/useAuth", () => ({
 
 vi.mock("@/lib/accounting", () => ({
   approveJournalEntry: vi.fn(),
+  attachAccountingDocument: vi.fn(),
   getJournalEntry: vi.fn(),
   listJournalEntryLines: vi.fn(),
   postJournalEntry: vi.fn(),
@@ -76,6 +84,7 @@ function renderPage() {
 describe("JournalEntryDetailPage", () => {
   beforeEach(() => {
     vi.mocked(approveJournalEntry).mockReset();
+    vi.mocked(attachAccountingDocument).mockReset();
     vi.mocked(getJournalEntry).mockReset();
     vi.mocked(listJournalEntryLines).mockReset();
     vi.mocked(postJournalEntry).mockReset();
@@ -127,6 +136,15 @@ describe("JournalEntryDetailPage", () => {
     expect(await screen.findByRole("button", { name: /reverse journal/i })).toBeInTheDocument();
   });
 
+  it("shows document reference action for accounting role", async () => {
+    vi.mocked(getJournalEntry).mockResolvedValue(entry("posted"));
+
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: /add document reference/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add document reference/i })).toBeInTheDocument();
+  });
+
   it.each(["receptionist", "teacher", "auditor"])("hides mutation actions for %s", async (role) => {
     mockRole(role);
     vi.mocked(getJournalEntry).mockResolvedValue(entry("posted"));
@@ -137,6 +155,7 @@ describe("JournalEntryDetailPage", () => {
     expect(screen.queryByRole("button", { name: /approve journal/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /post journal/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reverse journal/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /add document reference/i })).not.toBeInTheDocument();
   });
 
   it("shows reversed journal as read-only", async () => {
@@ -168,5 +187,37 @@ describe("JournalEntryDetailPage", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /reverse journal/i }));
     await waitFor(() => expect(reverseJournalEntry).toHaveBeenCalledWith("entry-1", expect.objectContaining({ narration: expect.stringContaining("JV-000001") })));
+  });
+
+  it("submits document reference metadata through accounting helper", async () => {
+    vi.mocked(getJournalEntry).mockResolvedValue(entry("posted"));
+    vi.mocked(attachAccountingDocument).mockResolvedValue({
+      id: "document-1",
+      organization: "org-1",
+      journal_entry: "entry-1",
+      document_type: "voucher",
+      reference_number: "VCH-001",
+      file_path: "",
+      description: "Voucher reference",
+      uploaded_by: null,
+      created_at: "",
+      updated_at: "",
+    });
+
+    renderPage();
+    await screen.findByRole("heading", { name: /add document reference/i });
+    fireEvent.change(screen.getByLabelText(/document type/i), { target: { value: "voucher" } });
+    fireEvent.change(screen.getByLabelText(/reference number/i), { target: { value: "VCH-001" } });
+    fireEvent.change(screen.getByLabelText(/^description$/i), { target: { value: "Voucher reference" } });
+    fireEvent.click(screen.getByRole("button", { name: /add document reference/i }));
+
+    await waitFor(() =>
+      expect(attachAccountingDocument).toHaveBeenCalledWith("entry-1", {
+        document_type: "voucher",
+        reference_number: "VCH-001",
+        description: "Voucher reference",
+      }),
+    );
+    expect(await screen.findByText("Document reference added.")).toBeInTheDocument();
   });
 });

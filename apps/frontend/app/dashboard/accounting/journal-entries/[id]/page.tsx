@@ -1,5 +1,6 @@
 "use client";
 
+import { FormEvent } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,10 +12,18 @@ import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SimpleTable, type SimpleTableColumn } from "@/components/ui/SimpleTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { TextInput } from "@/components/ui/TextInput";
 import { useAuth } from "@/hooks/useAuth";
-import { approveJournalEntry, getJournalEntry, listJournalEntryLines, postJournalEntry, reverseJournalEntry } from "@/lib/accounting";
+import {
+  approveJournalEntry,
+  attachAccountingDocument,
+  getJournalEntry,
+  listJournalEntryLines,
+  postJournalEntry,
+  reverseJournalEntry,
+} from "@/lib/accounting";
 import type { Role } from "@/types/auth";
-import type { JournalEntry, JournalEntryLine } from "@/types/accounting";
+import type { AccountingDocumentInput, JournalEntry, JournalEntryLine } from "@/types/accounting";
 
 const accountingRoles: Role[] = ["super_admin", "institute_owner", "accountant"];
 const immutableStatuses: JournalEntry["status"][] = ["posted", "reversed", "void"];
@@ -33,6 +42,16 @@ const lineColumns: SimpleTableColumn<JournalEntryLine>[] = [
   { header: "Description", render: (line) => line.description || "Not set" },
   { header: "Debit", render: (line) => <MoneyDisplay amount={line.debit_amount} /> },
   { header: "Credit", render: (line) => <MoneyDisplay amount={line.credit_amount} /> },
+];
+
+const documentTypeOptions = [
+  { label: "Voucher", value: "voucher" },
+  { label: "Receipt", value: "receipt" },
+  { label: "Invoice", value: "invoice" },
+  { label: "Contract", value: "contract" },
+  { label: "Bank statement", value: "bank_statement" },
+  { label: "Supporting document", value: "supporting_document" },
+  { label: "Other", value: "other" },
 ];
 
 export default function JournalEntryDetailPage({ params }: { params: { id: string } }) {
@@ -59,11 +78,30 @@ export default function JournalEntryDetailPage({ params }: { params: { id: strin
     mutationFn: () => reverseJournalEntry(params.id, { narration: `Reversal of ${entry?.entry_number ?? "journal entry"}` }),
     onSuccess: refreshEntry,
   });
+  const documentMutation = useMutation({
+    mutationFn: (payload: AccountingDocumentInput) => attachAccountingDocument(params.id, payload),
+  });
 
   const showApprove = canMutate && entry && ["draft", "pending_approval"].includes(entry.status);
   const showPost = canMutate && entry?.status === "approved";
   const showReverse = canMutate && entry?.status === "posted";
   const isReadOnly = entry ? immutableStatuses.includes(entry.status) : false;
+
+  function handleDocumentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    documentMutation.mutate(
+      {
+        document_type: String(formData.get("document_type") ?? ""),
+        reference_number: String(formData.get("reference_number") ?? ""),
+        description: String(formData.get("description") ?? ""),
+      },
+      {
+        onSuccess: () => form.reset(),
+      },
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -99,7 +137,14 @@ export default function JournalEntryDetailPage({ params }: { params: { id: strin
       {approveMutation.isSuccess ? <p className="rounded-md bg-green-50 px-4 py-3 text-sm font-medium text-green-700">Journal entry approved.</p> : null}
       {postMutation.isSuccess ? <p className="rounded-md bg-green-50 px-4 py-3 text-sm font-medium text-green-700">Journal entry posted.</p> : null}
       {reverseMutation.isSuccess ? <p className="rounded-md bg-green-50 px-4 py-3 text-sm font-medium text-green-700">Journal entry reversed.</p> : null}
+      {documentMutation.isSuccess ? <p className="rounded-md bg-green-50 px-4 py-3 text-sm font-medium text-green-700">Document reference added.</p> : null}
       {approveMutation.isError || postMutation.isError || reverseMutation.isError ? <ErrorState title="Journal action failed" /> : null}
+      {documentMutation.isError ? (
+        <ErrorState
+          message={documentMutation.error instanceof Error ? documentMutation.error.message : "Unable to add document reference."}
+          title="Document reference failed"
+        />
+      ) : null}
 
       {entry ? (
         <section className="space-y-4">
@@ -130,6 +175,34 @@ export default function JournalEntryDetailPage({ params }: { params: { id: strin
               title="No journal lines"
             />
           )}
+
+          {canMutate ? (
+            <form className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)]" onSubmit={handleDocumentSubmit}>
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-[#262B40]">Add Document Reference</h2>
+                <p className="mt-1 text-sm text-slate-500">Metadata only. File upload is not enabled here.</p>
+              </div>
+              <fieldset className="grid gap-4 md:grid-cols-3" disabled={documentMutation.isPending}>
+                <label className="block text-sm font-medium text-slate-700">
+                  Document type
+                  <select className="mt-2 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" name="document_type" required>
+                    {documentTypeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <TextInput label="Reference number" name="reference_number" placeholder="VCH-001" />
+                <TextInput label="Description" name="description" placeholder="Supporting voucher reference" />
+              </fieldset>
+              <div className="mt-4 flex justify-end">
+                <Button isLoading={documentMutation.isPending} type="submit" variant="secondary">
+                  Add Document Reference
+                </Button>
+              </div>
+            </form>
+          ) : null}
         </section>
       ) : null}
 
