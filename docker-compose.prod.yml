@@ -1,0 +1,104 @@
+# Production-oriented Compose override/template.
+#
+# Usage:
+#   TCMS_ENV_FILE=/srv/tcms-erp/env/production.env \
+#     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# This file intentionally resets development bind mounts and public database/Redis
+# ports from docker-compose.yml. Keep real secrets in TCMS_ENV_FILE, not in Git.
+
+x-app-env: &app-env
+  env_file:
+    - ${TCMS_ENV_FILE:-.env.example}
+  restart: unless-stopped
+
+services:
+  postgres:
+    restart: unless-stopped
+    ports: !reset []
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tcms} -d ${POSTGRES_DB:-tcms_erp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    restart: unless-stopped
+    ports: !reset []
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    <<: *app-env
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3} --timeout ${GUNICORN_TIMEOUT:-60}
+    environment:
+      DJANGO_DEBUG: "false"
+      DJANGO_ENV: production
+      DJANGO_MEDIA_ROOT: /app/media
+      DJANGO_PRIVATE_MEDIA_ROOT: /app/private_media
+    volumes: !reset
+      - tcms_media:/app/media
+      - tcms_private_media:/app/private_media
+    ports: !reset
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    <<: *app-env
+    command: sh -c "npm run build && npm run start"
+    environment:
+      NODE_ENV: production
+    volumes: !reset []
+    ports: !reset
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+
+  celery_worker:
+    <<: *app-env
+    command: celery -A config worker -l info
+    environment:
+      DJANGO_DEBUG: "false"
+      DJANGO_ENV: production
+      DJANGO_MEDIA_ROOT: /app/media
+      DJANGO_PRIVATE_MEDIA_ROOT: /app/private_media
+    volumes: !reset
+      - tcms_media:/app/media
+      - tcms_private_media:/app/private_media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_beat:
+    <<: *app-env
+    command: celery -A config beat -l info
+    environment:
+      DJANGO_DEBUG: "false"
+      DJANGO_ENV: production
+      DJANGO_MEDIA_ROOT: /app/media
+      DJANGO_PRIVATE_MEDIA_ROOT: /app/private_media
+    volumes: !reset
+      - tcms_media:/app/media
+      - tcms_private_media:/app/private_media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  tcms_media:
+  tcms_private_media:

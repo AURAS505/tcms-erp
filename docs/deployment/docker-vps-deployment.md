@@ -128,6 +128,8 @@ For production, create a deployment-specific Compose override or production Comp
 - avoids exposing PostgreSQL and Redis publicly
 - uses Docker restart policies such as `restart: unless-stopped`
 
+This repository includes a production-oriented template at `docker-compose.prod.yml`. It resets development bind mounts, uses Gunicorn for Django, uses `next start` for the frontend after building, mounts persistent media volumes, removes public PostgreSQL/Redis ports, and binds backend/frontend ports to localhost for Nginx.
+
 Example backend command:
 
 ```yaml
@@ -151,7 +153,8 @@ docker compose --env-file /srv/tcms-erp/env/production.env build
 If using a production override:
 
 ```bash
-docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml build
+TCMS_ENV_FILE=/srv/tcms-erp/env/production.env \
+  docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml build
 ```
 
 ## Run Migrations
@@ -159,13 +162,15 @@ docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml
 Review first:
 
 ```bash
-docker compose --env-file /srv/tcms-erp/env/production.env run --rm backend python manage.py migrate --plan
+TCMS_ENV_FILE=/srv/tcms-erp/env/production.env \
+  docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python manage.py migrate --plan
 ```
 
 Apply:
 
 ```bash
-docker compose --env-file /srv/tcms-erp/env/production.env run --rm backend python manage.py migrate
+TCMS_ENV_FILE=/srv/tcms-erp/env/production.env \
+  docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python manage.py migrate
 ```
 
 Run backups immediately before applying production migrations.
@@ -175,7 +180,8 @@ Run backups immediately before applying production migrations.
 Create only approved admin accounts:
 
 ```bash
-docker compose --env-file /srv/tcms-erp/env/production.env run --rm backend python manage.py createsuperuser
+TCMS_ENV_FILE=/srv/tcms-erp/env/production.env \
+  docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml run --rm backend python manage.py createsuperuser
 ```
 
 Use strong credentials and remove temporary accounts after go-live.
@@ -183,7 +189,8 @@ Use strong credentials and remove temporary accounts after go-live.
 ## Start Services
 
 ```bash
-docker compose --env-file /srv/tcms-erp/env/production.env up -d
+TCMS_ENV_FILE=/srv/tcms-erp/env/production.env \
+  docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 Check:
@@ -205,6 +212,8 @@ Use persistent directories:
 ```
 
 Do not expose private media through Nginx. Use `file-storage-security.md` for private document guidance. Set Nginx upload limit to match or exceed `DJANGO_MAX_UPLOAD_SIZE_BYTES`.
+
+Static files are currently served by the frontend build and Django admin/static needs should be reviewed for the final production reverse proxy. If backend static serving is required, add an explicit static collection/serving strategy before go-live.
 
 ## SSL and HTTPS
 

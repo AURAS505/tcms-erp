@@ -3,7 +3,7 @@
 Use these documents together for production readiness and operations:
 
 - `local-development.md` - local Docker development.
-- `docker-vps-deployment.md` - recommended Ubuntu VPS Docker Compose deployment path.
+- `docker-vps-deployment.md` - recommended Ubuntu VPS Docker Compose deployment path, including `docker-compose.prod.yml`.
 - `production-security.md` - production security, cookies, CSRF, CORS, and HTTPS settings.
 - `file-storage-security.md` - private file validation and storage guidance.
 - `monitoring-and-logging.md` - logging, health checks, and error tracking readiness.
