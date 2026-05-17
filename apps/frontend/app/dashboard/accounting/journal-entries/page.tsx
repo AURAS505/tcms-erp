@@ -10,8 +10,12 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { SimpleTable, type SimpleTableColumn } from "@/components/ui/SimpleTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useAuth } from "@/hooks/useAuth";
 import { listJournalEntries } from "@/lib/accounting";
+import type { Role } from "@/types/auth";
 import type { JournalEntry } from "@/types/accounting";
+
+const accountingRoles: Role[] = ["super_admin", "institute_owner", "accountant"];
 
 const columns: SimpleTableColumn<JournalEntry>[] = [
   {
@@ -30,6 +34,8 @@ const columns: SimpleTableColumn<JournalEntry>[] = [
 
 export default function JournalEntriesPage() {
   const [search, setSearch] = useState("");
+  const { hasRole } = useAuth();
+  const canMutate = accountingRoles.some((role) => hasRole(role));
   const { data, error, isLoading } = useQuery({
     queryKey: ["journal-entries", search],
     queryFn: () => listJournalEntries(search),
@@ -38,8 +44,17 @@ export default function JournalEntriesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        actions={<SearchInput onChange={(event) => setSearch(event.target.value)} placeholder="Search journal entries" value={search} />}
-        description="Read-only journal entries. Manual entry, approval, posting, and reversal workflows are not exposed here."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <SearchInput onChange={(event) => setSearch(event.target.value)} placeholder="Search journal entries" value={search} />
+            {canMutate ? (
+              <Link className="rounded-md bg-[#0948B3] px-3 py-2 text-sm font-semibold text-white hover:bg-[#073a91]" href="/dashboard/accounting/journal-entries/new">
+                New Journal Entry
+              </Link>
+            ) : null}
+          </div>
+        }
+        description="Manual journal drafts, approval, posting, and reversal workflows are available to accounting roles."
         title="Journal Entries"
       />
 

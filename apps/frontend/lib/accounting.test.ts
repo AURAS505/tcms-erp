@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  approveJournalEntry,
+  attachAccountingDocument,
+  createManualJournalEntry,
   getAccount,
   getBalanceSheet,
   getGeneralLedger,
@@ -10,6 +13,8 @@ import {
   listAccounts,
   listJournalEntries,
   listJournalEntryLines,
+  postJournalEntry,
+  reverseJournalEntry,
 } from "@/lib/accounting";
 
 const mockFetch = (data: unknown) => {
@@ -109,6 +114,54 @@ describe("accounting API client", () => {
       4,
       "http://localhost:8000/api/v1/reports/balance-sheet/?organization=org-1&date_to=2026-12-31",
       expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
+  it("calls expected accounting mutation endpoints", async () => {
+    const fetchMock = mockFetch({ id: "entry-1" });
+
+    await createManualJournalEntry({
+      organization: "org-1",
+      branch: "branch-1",
+      academic_year: "year-1",
+      academic_period: null,
+      entry_date_ad: "2026-04-15",
+      description: "Manual journal",
+      narration: "Adjustment",
+      lines: [
+        { account: "cash", description: "Cash", debit_amount: "100.00", credit_amount: "0.00" },
+        { account: "capital", description: "Capital", debit_amount: "0.00", credit_amount: "100.00" },
+      ],
+    });
+    await approveJournalEntry("entry-1");
+    await postJournalEntry("entry-1");
+    await reverseJournalEntry("entry-1", { reversal_date_ad: "2026-04-16", narration: "Reverse entry" });
+    await attachAccountingDocument("entry-1", { document_type: "voucher", reference_number: "VCH-001" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://localhost:8000/api/v1/journal-entries/create-manual/",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining('"lines"') }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "http://localhost:8000/api/v1/journal-entries/entry-1/approve/",
+      expect.objectContaining({ method: "POST", body: "{}" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "http://localhost:8000/api/v1/journal-entries/entry-1/post/",
+      expect.objectContaining({ method: "POST", body: "{}" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "http://localhost:8000/api/v1/journal-entries/entry-1/reverse/",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining("Reverse entry") }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "http://localhost:8000/api/v1/journal-entries/entry-1/documents/",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining("VCH-001") }),
     );
   });
 });

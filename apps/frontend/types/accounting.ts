@@ -171,6 +171,40 @@ export interface AccountingReportFilters {
   include_zero_balances?: boolean;
 }
 
+export interface ManualJournalLineInput {
+  account: string;
+  description?: string;
+  debit_amount?: string;
+  credit_amount?: string;
+}
+
+export interface ManualJournalCreateInput {
+  organization: string;
+  branch: string;
+  academic_year: string;
+  academic_period?: string | null;
+  entry_date_ad: string;
+  entry_date_bs?: string;
+  description: string;
+  narration?: string;
+  lines: ManualJournalLineInput[];
+}
+
+export type JournalApproveInput = Record<string, never>;
+export type JournalPostInput = Record<string, never>;
+
+export interface JournalReverseInput {
+  reversal_date_ad?: string;
+  narration?: string;
+}
+
+export interface AccountingDocumentInput {
+  document_type: string;
+  reference_number?: string;
+  file_path?: string;
+  description?: string;
+}
+
 export type PaginatedAccounts = PaginatedResponse<Account>;
 export type PaginatedJournalEntries = PaginatedResponse<JournalEntry>;
 export type PaginatedJournalEntryLines = PaginatedResponse<JournalEntryLine>;

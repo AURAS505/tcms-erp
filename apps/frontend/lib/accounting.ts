@@ -2,11 +2,14 @@ import { apiClient, apiClientEnvelope } from "@/lib/api-client";
 import type {
   Account,
   AccountingDocument,
+  AccountingDocumentInput,
   AccountingReportFilters,
   BalanceSheetReport,
   GeneralLedgerReport,
   JournalEntry,
   JournalEntryLine,
+  JournalReverseInput,
+  ManualJournalCreateInput,
   ProfitLossReport,
   TrialBalanceReport,
 } from "@/types/accounting";
@@ -57,6 +60,41 @@ export function getJournalEntry(id: string) {
 
 export function listJournalEntryLines(search?: string) {
   return listResource<JournalEntryLine>(buildListPath(`${ACCOUNTING_API_BASE}/journal-entry-lines/`, search));
+}
+
+export function createManualJournalEntry(payload: ManualJournalCreateInput) {
+  return apiClient<JournalEntry>(`${ACCOUNTING_API_BASE}/journal-entries/create-manual/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function approveJournalEntry(id: string) {
+  return apiClient<JournalEntry>(`${ACCOUNTING_API_BASE}/journal-entries/${id}/approve/`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export function postJournalEntry(id: string) {
+  return apiClient<JournalEntry>(`${ACCOUNTING_API_BASE}/journal-entries/${id}/post/`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export function reverseJournalEntry(id: string, payload: JournalReverseInput = {}) {
+  return apiClient<JournalEntry>(`${ACCOUNTING_API_BASE}/journal-entries/${id}/reverse/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function attachAccountingDocument(id: string, payload: AccountingDocumentInput) {
+  return apiClient<AccountingDocument>(`${ACCOUNTING_API_BASE}/journal-entries/${id}/documents/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listAccountingDocuments(search?: string) {
