@@ -96,6 +96,10 @@ See `docs/deployment/file-storage-security.md` for the private media design, upl
 
 Logging, health checks, frontend error boundaries, and optional Sentry-compatible environment placeholders are documented in `docs/deployment/monitoring-and-logging.md`.
 
+## Backup and Restore
+
+Database backup scripts, media/private media backup scripts, and restore drill SOPs are documented in `docs/deployment/backup-and-restore.md`.
+
 ## Frontend Variable
 
 Set the frontend API base URL to the deployed backend origin:
@@ -137,5 +141,5 @@ Production startup rejects:
 - Authenticated private file download endpoints and signed URL support.
 - MIME signature checks and optional malware scanning for uploaded files.
 - Sentry or equivalent SDK wiring after the production monitoring provider is chosen.
-- Backup automation and restore drills.
+- Deployment-specific backup scheduling and remote encrypted backup sync.
 - Optional account lockout, CAPTCHA, or IP reputation controls if operational abuse requires stronger controls.
