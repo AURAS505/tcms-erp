@@ -51,6 +51,7 @@ Services:
 ## Production Security
 
 Production cookie, CSRF, CORS, HTTPS, and reverse proxy settings are documented in `docs/deployment/production-security.md`.
+Private file validation and storage guidance is documented in `docs/deployment/file-storage-security.md`.
 
 ## Source Document Status
 

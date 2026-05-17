@@ -128,8 +128,12 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = os.getenv("DJANGO_MEDIA_URL", "media/")
+MEDIA_ROOT = Path(os.getenv("DJANGO_MEDIA_ROOT", str(BASE_DIR / "media")))
+PRIVATE_MEDIA_ROOT = Path(os.getenv("DJANGO_PRIVATE_MEDIA_ROOT", str(BASE_DIR / "private_media")))
+DEFAULT_FILE_STORAGE = os.getenv("DJANGO_DEFAULT_FILE_STORAGE", "django.core.files.storage.FileSystemStorage")
+MAX_UPLOAD_SIZE_BYTES = env_int("DJANGO_MAX_UPLOAD_SIZE_BYTES", 2 * 1024 * 1024)
+ALLOWED_UPLOAD_EXTENSIONS = env_list("DJANGO_ALLOWED_UPLOAD_EXTENSIONS", "pdf,jpg,jpeg,png,doc,docx")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"

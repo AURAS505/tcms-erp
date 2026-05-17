@@ -21,6 +21,12 @@ DJANGO_THROTTLE_PASSWORD_RESET_REQUEST=3/min
 DJANGO_THROTTLE_PASSWORD_RESET_CONFIRM=5/min
 DJANGO_THROTTLE_FORCE_PASSWORD_CHANGE=5/min
 DJANGO_THROTTLE_CSRF_TOKEN=30/min
+DJANGO_MEDIA_ROOT=/app/media
+DJANGO_MEDIA_URL=/media/
+DJANGO_PRIVATE_MEDIA_ROOT=/app/private_media
+DJANGO_DEFAULT_FILE_STORAGE=django.core.files.storage.FileSystemStorage
+DJANGO_MAX_UPLOAD_SIZE_BYTES=2097152
+DJANGO_ALLOWED_UPLOAD_EXTENSIONS=pdf,jpg,jpeg,png,doc,docx
 ```
 
 Do not use wildcard CORS origins when credentials are enabled. The backend raises a configuration error if credentials are combined with wildcard origins.
@@ -80,6 +86,12 @@ DJANGO_THROTTLE_CSRF_TOKEN=30/min
 
 Password reset request responses remain generic and do not reveal whether an email exists. Throttled requests return HTTP 429.
 
+## File Storage
+
+Document references are currently metadata-only. Upload endpoints should use the common file validators before accepting files, keep sensitive files out of public media storage, and avoid trusting original filenames for storage paths.
+
+See `docs/deployment/file-storage-security.md` for the private media design, upload size/extension settings, and S3-compatible storage guidance.
+
 ## Frontend Variable
 
 Set the frontend API base URL to the deployed backend origin:
@@ -118,7 +130,8 @@ Production startup rejects:
 
 ## Still Pending
 
-- Private file validation and storage hardening.
+- Authenticated private file download endpoints and signed URL support.
+- MIME signature checks and optional malware scanning for uploaded files.
 - Sentry or equivalent error monitoring.
 - Backup automation and restore drills.
 - Optional account lockout, CAPTCHA, or IP reputation controls if operational abuse requires stronger controls.
