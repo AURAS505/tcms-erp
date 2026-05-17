@@ -128,7 +128,7 @@ For production, create a deployment-specific Compose override or production Comp
 - avoids exposing PostgreSQL and Redis publicly
 - uses Docker restart policies such as `restart: unless-stopped`
 
-This repository includes a production-oriented template at `docker-compose.prod.yml`. It resets development bind mounts, uses Gunicorn for Django, uses `next start` for the frontend after building, mounts persistent media volumes, removes public PostgreSQL/Redis ports, and binds backend/frontend ports to localhost for Nginx.
+This repository includes a production-oriented template at `docker-compose.prod.yml`. It resets development bind mounts, uses `docker/Dockerfile.backend.prod` for Django/Celery, uses `docker/Dockerfile.frontend.prod` for a prebuilt Next.js image, mounts persistent media volumes, removes public PostgreSQL/Redis ports, and binds backend/frontend ports to localhost for Nginx.
 
 Example backend command:
 
@@ -142,19 +142,22 @@ Example frontend command:
 command: npm run start
 ```
 
+The frontend production image runs `npm run build` during image build, not at container startup. Changes to build-time public frontend variables such as `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_APP_ENV`, or `NEXT_PUBLIC_SENTRY_DSN` require rebuilding the frontend image.
+
 ## Build Containers
 
 From the approved release:
 
 ```bash
-docker compose --env-file /srv/tcms-erp/env/production.env build
+TCMS_ENV_FILE=/srv/tcms-erp/env/production.env \
+  docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml build
 ```
 
-If using a production override:
+To rebuild only application images:
 
 ```bash
 TCMS_ENV_FILE=/srv/tcms-erp/env/production.env \
-  docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml build
+  docker compose --env-file /srv/tcms-erp/env/production.env -f docker-compose.yml -f docker-compose.prod.yml build backend frontend
 ```
 
 ## Run Migrations
@@ -214,6 +217,8 @@ Use persistent directories:
 Do not expose private media through Nginx. Use `file-storage-security.md` for private document guidance. Set Nginx upload limit to match or exceed `DJANGO_MAX_UPLOAD_SIZE_BYTES`.
 
 Static files are currently served by the frontend build and Django admin/static needs should be reviewed for the final production reverse proxy. If backend static serving is required, add an explicit static collection/serving strategy before go-live.
+
+Migrations remain a runtime deployment step. Do not run migrations during Docker image build.
 
 ## SSL and HTTPS
 

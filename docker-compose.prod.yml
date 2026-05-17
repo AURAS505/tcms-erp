@@ -37,6 +37,9 @@ services:
 
   backend:
     <<: *app-env
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend.prod
     command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3} --timeout ${GUNICORN_TIMEOUT:-60}
     environment:
       DJANGO_DEBUG: "false"
@@ -56,7 +59,14 @@ services:
 
   frontend:
     <<: *app-env
-    command: sh -c "npm run build && npm run start"
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend.prod
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+        NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-production}
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    command: npm run start
     environment:
       NODE_ENV: production
     volumes: !reset []
@@ -67,6 +77,9 @@ services:
 
   celery_worker:
     <<: *app-env
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend.prod
     command: celery -A config worker -l info
     environment:
       DJANGO_DEBUG: "false"
@@ -84,6 +97,9 @@ services:
 
   celery_beat:
     <<: *app-env
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend.prod
     command: celery -A config beat -l info
     environment:
       DJANGO_DEBUG: "false"
