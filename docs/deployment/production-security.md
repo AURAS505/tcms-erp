@@ -100,6 +100,14 @@ Logging, health checks, frontend error boundaries, and optional Sentry-compatibl
 
 Database backup scripts, media/private media backup scripts, and restore drill SOPs are documented in `docs/deployment/backup-and-restore.md`.
 
+## Release Operations
+
+Production release checklist, go-live sequence, and rollback procedure are documented in:
+
+- `docs/deployment/production-release-checklist.md`
+- `docs/deployment/go-live-runbook.md`
+- `docs/deployment/rollback-sop.md`
+
 ## Frontend Variable
 
 Set the frontend API base URL to the deployed backend origin:

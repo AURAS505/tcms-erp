@@ -2,6 +2,8 @@
 
 TCMS ERP is prepared for production observability with environment-driven logging, health checks, and optional error tracking configuration. Local development works without monitoring credentials.
 
+During release and rollback operations, use this guide with `go-live-runbook.md` and `rollback-sop.md`.
+
 ## Backend Logging
 
 Django logs to stdout/stderr through a console handler. Set the log level with:

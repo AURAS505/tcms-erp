@@ -2,6 +2,8 @@
 
 Backups are not operationally real until a restore has been tested. TCMS ERP production operations must include database backups, private media backups, retention monitoring, and scheduled restore drills.
 
+Use this SOP with `production-release-checklist.md`, `go-live-runbook.md`, and `rollback-sop.md`.
+
 ## Environment Variables
 
 Set these values in the environment that runs the scripts:

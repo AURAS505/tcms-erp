@@ -50,10 +50,15 @@ Services:
 
 ## Production Security
 
-Production cookie, CSRF, CORS, HTTPS, and reverse proxy settings are documented in `docs/deployment/production-security.md`.
-Private file validation and storage guidance is documented in `docs/deployment/file-storage-security.md`.
-Monitoring, logging, health checks, and error tracking readiness are documented in `docs/deployment/monitoring-and-logging.md`.
-Backup automation and restore drill SOPs are documented in `docs/deployment/backup-and-restore.md`.
+Deployment documentation is indexed in `docs/deployment/README.md`.
+
+- Production cookie, CSRF, CORS, HTTPS, and reverse proxy settings: `docs/deployment/production-security.md`
+- Private file validation and storage guidance: `docs/deployment/file-storage-security.md`
+- Monitoring, logging, health checks, and error tracking readiness: `docs/deployment/monitoring-and-logging.md`
+- Backup automation and restore drills: `docs/deployment/backup-and-restore.md`
+- Production release checklist: `docs/deployment/production-release-checklist.md`
+- Go-live runbook: `docs/deployment/go-live-runbook.md`
+- Rollback SOP: `docs/deployment/rollback-sop.md`
 
 ## Source Document Status
 
