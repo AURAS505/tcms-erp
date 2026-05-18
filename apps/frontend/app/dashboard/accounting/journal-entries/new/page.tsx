@@ -6,10 +6,13 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ActionBar } from "@/components/ui/ActionBar";
+import { FormCard } from "@/components/ui/FormCard";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { TextInput } from "@/components/ui/TextInput";
+import { WarningPanel } from "@/components/ui/WarningPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { createManualJournalEntry, listAccounts } from "@/lib/accounting";
 import { listAcademicPeriods, listAcademicYears, listBranches, listOrganizations } from "@/lib/lookups";
@@ -130,7 +133,14 @@ export default function NewJournalEntryPage() {
         <ErrorState message={createMutation.error instanceof Error ? createMutation.error.message : "Unable to create journal entry."} title="Creation failed" />
       ) : null}
 
-      <form className="space-y-5 rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)]" onSubmit={handleSubmit}>
+      <FormCard
+        description="Create a draft with balanced debit and credit lines. Approval and posting remain backend-controlled."
+        onSubmit={handleSubmit}
+        title="Journal draft details"
+      >
+        <WarningPanel tone="warning" title="Manual journal control">
+          Manual journals require balanced one-sided lines and supporting documentation before posting.
+        </WarningPanel>
         <fieldset className="grid gap-4 md:grid-cols-2" disabled={!canMutate || createMutation.isPending}>
           <label className="block text-sm font-medium text-slate-700">
             Organization
@@ -240,12 +250,12 @@ export default function NewJournalEntryPage() {
         {!isBalanced ? <p className="text-sm font-medium text-red-600">Debit and credit totals must balance before submission.</p> : null}
         {validLines.length < 2 || validLines.length !== lines.length ? <p className="text-sm font-medium text-red-600">At least two valid one-sided journal lines are required.</p> : null}
 
-        <div className="flex justify-end">
+        <ActionBar>
           <Button disabled={!canSubmit} isLoading={createMutation.isPending} type="submit">
             Create draft journal
           </Button>
-        </div>
-      </form>
+        </ActionBar>
+      </FormCard>
     </div>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent } from "react";
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouteId } from "@/hooks/useRouteId";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,10 +9,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
+import { DetailCard } from "@/components/ui/DetailCard";
+import { DetailGrid, DetailItem } from "@/components/ui/DetailGrid";
+import { FormCard } from "@/components/ui/FormCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SimpleTable, type SimpleTableColumn } from "@/components/ui/SimpleTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TextInput } from "@/components/ui/TextInput";
+import { WarningPanel } from "@/components/ui/WarningPanel";
 import { useAuth } from "@/hooks/useAuth";
 import {
   approveJournalEntry,
@@ -28,15 +31,6 @@ import type { AccountingDocumentInput, JournalEntry, JournalEntryLine } from "@/
 
 const accountingRoles: Role[] = ["super_admin", "institute_owner", "accountant"];
 const immutableStatuses: JournalEntry["status"][] = ["posted", "reversed", "void"];
-
-function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt>
-      <dd className="mt-1 text-sm text-slate-800">{value || "Not set"}</dd>
-    </div>
-  );
-}
 
 const lineColumns: SimpleTableColumn<JournalEntryLine>[] = [
   { header: "Account", render: (line) => line.account },
@@ -137,10 +131,10 @@ export default function JournalEntryDetailPage({ params }: { params: Promise<{ i
 
       {isLoading ? <LoadingState label="Loading journal entry..." /> : null}
       {error ? <ErrorState message={error instanceof Error ? error.message : undefined} /> : null}
-      {approveMutation.isSuccess ? <p className="rounded-md bg-green-50 px-4 py-3 text-sm font-medium text-green-700">Journal entry approved.</p> : null}
-      {postMutation.isSuccess ? <p className="rounded-md bg-green-50 px-4 py-3 text-sm font-medium text-green-700">Journal entry posted.</p> : null}
-      {reverseMutation.isSuccess ? <p className="rounded-md bg-green-50 px-4 py-3 text-sm font-medium text-green-700">Journal entry reversed.</p> : null}
-      {documentMutation.isSuccess ? <p className="rounded-md bg-green-50 px-4 py-3 text-sm font-medium text-green-700">Document reference added.</p> : null}
+      {approveMutation.isSuccess ? <WarningPanel tone="success">Journal entry approved.</WarningPanel> : null}
+      {postMutation.isSuccess ? <WarningPanel tone="success">Journal entry posted.</WarningPanel> : null}
+      {reverseMutation.isSuccess ? <WarningPanel tone="success">Journal entry reversed.</WarningPanel> : null}
+      {documentMutation.isSuccess ? <WarningPanel tone="success">Document reference added.</WarningPanel> : null}
       {approveMutation.isError || postMutation.isError || reverseMutation.isError ? <ErrorState title="Journal action failed" /> : null}
       {documentMutation.isError ? (
         <ErrorState
@@ -151,23 +145,16 @@ export default function JournalEntryDetailPage({ params }: { params: Promise<{ i
 
       {entry ? (
         <section className="space-y-4">
-          <article className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)]">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-[#262B40]">{entry.description}</h2>
-                <p className="mt-1 text-sm text-slate-500">{entry.entry_date_ad}</p>
-              </div>
-              <StatusBadge status={entry.status} />
-            </div>
-            <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <DetailCard actions={<StatusBadge status={entry.status} />} description={entry.entry_date_ad} title={entry.description}>
+            <DetailGrid columns="four">
               <DetailItem label="Source" value={entry.source_app || entry.source_type} />
               <DetailItem label="Source number" value={entry.source_number} />
               <DetailItem label="Posting date" value={entry.posting_date_ad} />
               <DetailItem label="Posted at" value={entry.posted_at} />
-            </dl>
+            </DetailGrid>
             <p className="mt-6 text-sm leading-6 text-slate-700">{entry.narration || "No narration recorded."}</p>
-            {isReadOnly ? <p className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600">This journal entry is {entry.status} and is read-only.</p> : null}
-          </article>
+            {isReadOnly ? <WarningPanel tone="neutral" title="Read-only journal">This journal entry is {entry.status} and is read-only.</WarningPanel> : null}
+          </DetailCard>
 
           {lines.isLoading ? <LoadingState label="Loading journal lines..." /> : null}
           {lines.data && lines.data.data.length > 0 ? (
@@ -180,11 +167,11 @@ export default function JournalEntryDetailPage({ params }: { params: Promise<{ i
           )}
 
           {canMutate ? (
-            <form className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)]" onSubmit={handleDocumentSubmit}>
-              <div className="mb-4">
-                <h2 className="text-base font-semibold text-[#262B40]">Add Document Reference</h2>
-                <p className="mt-1 text-sm text-slate-500">Metadata only. File upload is not enabled here.</p>
-              </div>
+            <FormCard
+              description="Metadata only. File upload is not enabled here."
+              onSubmit={handleDocumentSubmit}
+              title="Add Document Reference"
+            >
               <fieldset className="grid gap-4 md:grid-cols-3" disabled={documentMutation.isPending}>
                 <label className="block text-sm font-medium text-slate-700">
                   Document type
@@ -204,7 +191,7 @@ export default function JournalEntryDetailPage({ params }: { params: Promise<{ i
                   Add Document Reference
                 </Button>
               </div>
-            </form>
+            </FormCard>
           ) : null}
         </section>
       ) : null}

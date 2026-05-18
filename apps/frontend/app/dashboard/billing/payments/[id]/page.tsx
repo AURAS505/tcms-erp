@@ -1,6 +1,4 @@
 "use client";
-
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouteId } from "@/hooks/useRouteId";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,23 +7,17 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
+import { DetailCard } from "@/components/ui/DetailCard";
+import { DetailGrid, DetailItem } from "@/components/ui/DetailGrid";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { WarningPanel } from "@/components/ui/WarningPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { approveStudentPayment, getStudentPayment } from "@/lib/billing";
 import type { Role } from "@/types/auth";
 
 const approverRoles: Role[] = ["super_admin", "institute_owner", "accountant"];
 const immutableStatuses = ["posted", "voided", "refunded"];
-
-function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-semibold uppercase text-slate-500">{label}</dt>
-      <dd className="mt-1 text-sm text-slate-800">{value || "Not set"}</dd>
-    </div>
-  );
-}
 
 export default function PaymentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const id = useRouteId(params);
@@ -77,28 +69,24 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
         />
       ) : null}
       {approveMutation.isSuccess ? (
-        <div className="rounded-lg border border-green-100 bg-green-50 p-4 text-sm font-medium text-green-700">
-          Payment approved and posted.
-        </div>
+        <WarningPanel tone="success">Payment approved and posted.</WarningPanel>
       ) : null}
       {isImmutable ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+        <WarningPanel tone="neutral" title="Read-only payment">
           This payment is {payment?.status} and is read-only. Changes, voids, refunds, and accounting entries must use
           dedicated backend workflows.
-        </div>
+        </WarningPanel>
       ) : null}
 
       {payment ? (
         <section className="grid gap-4 lg:grid-cols-3">
-          <article className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)] lg:col-span-2">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-[#262B40]">{payment.receipt_number || payment.draft_receipt_number || payment.id}</h2>
-                <p className="mt-1 text-sm text-slate-500">Student {payment.student}</p>
-              </div>
-              <StatusBadge status={payment.status} />
-            </div>
-            <dl className="mt-6 grid gap-4 sm:grid-cols-2">
+          <DetailCard
+            actions={<StatusBadge status={payment.status} />}
+            className="lg:col-span-2"
+            description={`Student ${payment.student}`}
+            title={payment.receipt_number || payment.draft_receipt_number || payment.id}
+          >
+            <DetailGrid>
               <DetailItem label="Payment date" value={payment.payment_date_ad} />
               <DetailItem label="Method" value={payment.payment_method} />
               <DetailItem label="Amount" value={<MoneyDisplay amount={payment.amount} />} />
@@ -107,19 +95,17 @@ export default function PaymentDetailPage({ params }: { params: Promise<{ id: st
               <DetailItem label="Net received" value={<MoneyDisplay amount={payment.net_received_amount} />} />
               <DetailItem label="Reference" value={payment.reference_number} />
               <DetailItem label="Advance payment" value={payment.is_advance_payment ? "Yes" : "No"} />
-            </dl>
-          </article>
-          <article className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)]">
-            <h2 className="text-base font-semibold text-[#262B40]">Accounting Boundary</h2>
+            </DetailGrid>
+          </DetailCard>
+          <DetailCard title="Accounting Boundary">
             <p className="mt-4 text-sm leading-6 text-slate-700">
               The frontend does not calculate ledger effects. Approval sends the payment to the backend workflow, which
               validates allocations, assigns receipt numbers, and posts accounting entries.
             </p>
-          </article>
-          <article className="rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)] lg:col-span-3">
-            <h2 className="text-base font-semibold text-[#262B40]">Notes</h2>
+          </DetailCard>
+          <DetailCard className="lg:col-span-3" title="Notes">
             <p className="mt-4 text-sm leading-6 text-slate-700">{payment.notes || payment.void_reason || "No notes recorded."}</p>
-          </article>
+          </DetailCard>
         </section>
       ) : null}
 

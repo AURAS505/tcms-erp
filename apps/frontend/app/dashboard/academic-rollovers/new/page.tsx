@@ -6,8 +6,11 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ActionBar } from "@/components/ui/ActionBar";
+import { FormCard } from "@/components/ui/FormCard";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { WarningPanel } from "@/components/ui/WarningPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { listAcademicYears, prepareAcademicRollover } from "@/lib/academic";
 import { listOrganizations } from "@/lib/lookups";
@@ -52,7 +55,11 @@ export default function NewAcademicRolloverPage() {
       {organizations.isLoading || years.isLoading ? <LoadingState label="Loading rollover form..." /> : null}
       {organizations.error || years.error ? <ErrorState message="Unable to load rollover form options." /> : null}
       {prepare.isError ? <ErrorState message={prepare.error instanceof Error ? prepare.error.message : undefined} title="Prepare failed" /> : null}
-      <form className="space-y-5 rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)]" onSubmit={handleSubmit}>
+      <FormCard
+        description="Prepare the rollover record first. Validation, closing entries, opening balances, and activation remain backend-controlled."
+        onSubmit={handleSubmit}
+        title="Rollover preparation"
+      >
         <fieldset className="grid gap-4 md:grid-cols-2" disabled={!canMutate || prepare.isPending}>
           <label className="block text-sm font-medium text-slate-700">
             Organization
@@ -81,13 +88,13 @@ export default function NewAcademicRolloverPage() {
           Notes
           <textarea className="mt-2 min-h-24 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" disabled={!canMutate} name="notes" />
         </label>
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+        <WarningPanel tone="danger" title="High-risk financial workflow">
           Rollover is a high-risk financial process. Validation and execution remain backend-controlled.
-        </p>
-        <div className="flex justify-end">
+        </WarningPanel>
+        <ActionBar>
           <Button disabled={!canMutate} isLoading={prepare.isPending} type="submit">Prepare rollover</Button>
-        </div>
-      </form>
+        </ActionBar>
+      </FormCard>
     </div>
   );
 }

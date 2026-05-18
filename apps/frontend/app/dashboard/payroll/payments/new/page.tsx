@@ -6,12 +6,15 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ActionBar } from "@/components/ui/ActionBar";
+import { FormCard } from "@/components/ui/FormCard";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { MoneyDisplay } from "@/components/ui/MoneyDisplay";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SimpleTable, type SimpleTableColumn } from "@/components/ui/SimpleTable";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TextInput } from "@/components/ui/TextInput";
+import { WarningPanel } from "@/components/ui/WarningPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { listAcademicYears, listBranches, listOrganizations } from "@/lib/lookups";
 import { createDraftTeacherPayment, listTeacherEarnings } from "@/lib/payroll";
@@ -178,7 +181,14 @@ export default function NewTeacherPaymentPage() {
         />
       ) : null}
 
-      <form className="grid gap-5 rounded-lg bg-white p-5 shadow-[0_2px_18px_rgba(38,43,64,0.08)]" onSubmit={handleSubmit}>
+      <FormCard
+        description="Capture payment allocation against approved teacher earnings. Posting remains backend-controlled."
+        onSubmit={handleSubmit}
+        title="Teacher payment draft details"
+      >
+        <WarningPanel tone="info" title="Payroll ledger boundary">
+          Draft teacher payments do not affect cash or teacher payable accounts until backend approval and posting succeeds.
+        </WarningPanel>
         <fieldset className="grid gap-4 md:grid-cols-2" disabled={!canMutate || createMutation.isPending}>
           <label className="block text-sm font-medium text-slate-700">
             Organization
@@ -382,12 +392,12 @@ export default function NewTeacherPaymentPage() {
           <textarea className="mt-2 min-h-24 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" disabled={!canMutate} name="notes" />
         </label>
 
-        <div className="flex justify-end gap-2">
+        <ActionBar>
           <Button disabled={!canMutate || hasAllocationValidationError} isLoading={createMutation.isPending} type="submit">
             Create draft payment
           </Button>
-        </div>
-      </form>
+        </ActionBar>
+      </FormCard>
     </div>
   );
 }
