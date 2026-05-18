@@ -98,6 +98,8 @@ Create a dedicated dependency upgrade step for:
 
 Recommended next review date: 2026-05-25, or earlier if the application is scheduled for internet-facing production deployment before then.
 
+Detailed plan: `docs/deployment/frontend-dependency-upgrade-plan.md`.
+
 ## Status
 
 Dependency audit completed and documented. No safe low-risk dependency remediations were available through non-forced tooling in this environment.
