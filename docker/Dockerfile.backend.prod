@@ -14,6 +14,13 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY apps/backend /app
 
+RUN groupadd --system tcms \
+    && useradd --system --gid tcms --home-dir /app --shell /usr/sbin/nologin tcms \
+    && mkdir -p /app/media /app/private_media \
+    && chown -R tcms:tcms /app
+
+USER tcms
+
 EXPOSE 8000
 
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]

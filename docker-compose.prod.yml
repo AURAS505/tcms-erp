@@ -37,6 +37,7 @@ services:
 
   backend:
     <<: *app-env
+    image: tcms-erp-backend:latest
     build:
       context: .
       dockerfile: docker/Dockerfile.backend.prod
@@ -46,10 +47,10 @@ services:
       DJANGO_ENV: production
       DJANGO_MEDIA_ROOT: /app/media
       DJANGO_PRIVATE_MEDIA_ROOT: /app/private_media
-    volumes: !reset
+    volumes: !override
       - tcms_media:/app/media
       - tcms_private_media:/app/private_media
-    ports: !reset
+    ports: !override
       - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
@@ -59,6 +60,7 @@ services:
 
   frontend:
     <<: *app-env
+    image: tcms-erp-frontend:latest
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend.prod
@@ -70,13 +72,14 @@ services:
     environment:
       NODE_ENV: production
     volumes: !reset []
-    ports: !reset
+    ports: !override
       - "127.0.0.1:3000:3000"
     depends_on:
       - backend
 
   celery_worker:
     <<: *app-env
+    image: tcms-erp-backend:latest
     build:
       context: .
       dockerfile: docker/Dockerfile.backend.prod
@@ -86,7 +89,7 @@ services:
       DJANGO_ENV: production
       DJANGO_MEDIA_ROOT: /app/media
       DJANGO_PRIVATE_MEDIA_ROOT: /app/private_media
-    volumes: !reset
+    volumes: !override
       - tcms_media:/app/media
       - tcms_private_media:/app/private_media
     depends_on:
@@ -97,6 +100,7 @@ services:
 
   celery_beat:
     <<: *app-env
+    image: tcms-erp-backend:latest
     build:
       context: .
       dockerfile: docker/Dockerfile.backend.prod
@@ -106,7 +110,7 @@ services:
       DJANGO_ENV: production
       DJANGO_MEDIA_ROOT: /app/media
       DJANGO_PRIVATE_MEDIA_ROOT: /app/private_media
-    volumes: !reset
+    volumes: !override
       - tcms_media:/app/media
       - tcms_private_media:/app/private_media
     depends_on:
