@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@/types/auth";
 
 interface TopbarProps {
+  isMenuOpen?: boolean;
   onMenuClick?: () => void;
   user: User | null;
 }
@@ -17,7 +18,7 @@ function formatSegment(segment: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export function Topbar({ onMenuClick, user }: TopbarProps) {
+export function Topbar({ isMenuOpen = false, onMenuClick, user }: TopbarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { logout } = useAuth();
@@ -42,6 +43,8 @@ export function Topbar({ onMenuClick, user }: TopbarProps) {
       <div className="flex min-h-[66px] items-center justify-between gap-4 px-4 sm:px-5 lg:px-7">
         <div className="flex min-w-0 items-center gap-3">
           <button
+            aria-controls="mobile-primary-navigation"
+            aria-expanded={isMenuOpen}
             aria-label="Open navigation"
             className="inline-flex h-10 w-10 flex-col items-center justify-center gap-1 rounded-lg border border-[var(--tcms-color-border)] bg-white text-[#262B40] shadow-sm transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcms-color-focus)] focus-visible:ring-offset-2 lg:hidden"
             onClick={onMenuClick}

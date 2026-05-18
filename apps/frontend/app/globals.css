@@ -38,6 +38,14 @@ body {
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+a {
+  text-underline-offset: 3px;
+}
+
 @layer components {
   .tcms-card {
     border: 1px solid rgba(229, 231, 235, 0.8);
@@ -82,5 +90,11 @@ body {
     cursor: not-allowed;
     background: #f1f5f9;
     color: #94a3b8;
+  }
+
+  @media (max-width: 640px) {
+    .tcms-card {
+      border-radius: 0.5rem;
+    }
   }
 }

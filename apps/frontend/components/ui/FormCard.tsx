@@ -8,7 +8,7 @@ interface FormCardProps extends FormHTMLAttributes<HTMLFormElement> {
 
 export function FormCard({ children, className = "", description, title, ...props }: FormCardProps) {
   return (
-    <form className={`tcms-card space-y-5 p-5 ${className}`} {...props}>
+    <form className={`tcms-card space-y-5 p-4 sm:p-5 ${className}`} {...props}>
       {title || description ? (
         <div className="border-b border-slate-200/80 pb-4">
           {title ? <h2 className="text-base font-bold text-[#262B40]">{title}</h2> : null}

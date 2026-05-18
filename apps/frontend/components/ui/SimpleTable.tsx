@@ -6,6 +6,7 @@ export interface SimpleTableColumn<T> {
 }
 
 interface SimpleTableProps<T> {
+  "aria-label"?: string;
   columns: SimpleTableColumn<T>[];
   emptyMessage?: string;
   emptyTitle?: string;
@@ -13,11 +14,18 @@ interface SimpleTableProps<T> {
   rows: T[];
 }
 
-export function SimpleTable<T>({ columns, emptyMessage = "No records match the current view.", emptyTitle = "No records found", getRowKey, rows }: SimpleTableProps<T>) {
+export function SimpleTable<T>({
+  "aria-label": ariaLabel = "Data table",
+  columns,
+  emptyMessage = "No records match the current view.",
+  emptyTitle = "No records found",
+  getRowKey,
+  rows,
+}: SimpleTableProps<T>) {
   return (
     <div className="tcms-card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+        <table aria-label={ariaLabel} className="min-w-[720px] divide-y divide-slate-200 text-left text-sm sm:min-w-full">
           <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wide text-slate-500">
             <tr>
               {columns.map((column) => (

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
@@ -14,6 +14,19 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const [isMobileNavigationOpen, setIsMobileNavigationOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isMobileNavigationOpen) return undefined;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMobileNavigationOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isMobileNavigationOpen]);
 
   if (isLoading) {
     return (
@@ -50,7 +63,13 @@ export function AppShell({ children }: AppShellProps) {
     <div className="min-h-screen bg-[var(--tcms-color-bg)]">
       <Sidebar user={user} />
       {isMobileNavigationOpen ? (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-label="Mobile navigation" aria-modal="true">
+        <div
+          className="fixed inset-0 z-40 lg:hidden"
+          role="dialog"
+          aria-label="Mobile navigation"
+          aria-modal="true"
+          id="mobile-primary-navigation"
+        >
           <button
             aria-label="Close navigation"
             className="absolute inset-0 bg-slate-950/50"
@@ -65,7 +84,11 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       ) : null}
       <div className="lg:pl-64">
-        <Topbar onMenuClick={() => setIsMobileNavigationOpen(true)} user={user} />
+        <Topbar
+          isMenuOpen={isMobileNavigationOpen}
+          onMenuClick={() => setIsMobileNavigationOpen(true)}
+          user={user}
+        />
         <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-5 lg:px-7">{children}</main>
       </div>
     </div>

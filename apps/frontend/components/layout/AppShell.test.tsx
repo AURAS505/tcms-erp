@@ -114,5 +114,28 @@ describe("AppShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
 
     expect(await screen.findByRole("dialog", { name: "Mobile navigation" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open navigation" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("closes mobile navigation with escape", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      ...baseAuth,
+      isAuthenticated: true,
+      isLoading: false,
+      user,
+    });
+
+    render(
+      <AppShell>
+        <div>Protected content</div>
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    expect(await screen.findByRole("dialog", { name: "Mobile navigation" })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("dialog", { name: "Mobile navigation" })).not.toBeInTheDocument();
   });
 });

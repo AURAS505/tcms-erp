@@ -25,6 +25,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
+      aria-busy={isLoading ? "true" : undefined}
       className={`tcms-focus inline-flex min-h-10 items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none ${variants[variant]} ${className}`}
       disabled={disabled || isLoading}
       {...props}

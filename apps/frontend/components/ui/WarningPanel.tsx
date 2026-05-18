@@ -16,9 +16,23 @@ const tones: Record<WarningTone, string> = {
   warning: "border-amber-200 bg-amber-50 text-amber-800",
 };
 
+const liveRegions: Record<WarningTone, { live?: "polite"; role?: "alert" | "status" }> = {
+  danger: { role: "alert" },
+  info: { live: "polite", role: "status" },
+  neutral: {},
+  success: { live: "polite", role: "status" },
+  warning: { live: "polite", role: "status" },
+};
+
 export function WarningPanel({ children, title, tone = "info" }: WarningPanelProps) {
+  const liveRegion = liveRegions[tone];
+
   return (
-    <div className={`rounded-lg border px-4 py-3 text-sm leading-6 ${tones[tone]}`}>
+    <div
+      aria-live={liveRegion.live}
+      className={`rounded-lg border px-4 py-3 text-sm leading-6 ${tones[tone]}`}
+      role={liveRegion.role}
+    >
       {title ? <p className="font-bold">{title}</p> : null}
       <div className={title ? "mt-1" : ""}>{children}</div>
     </div>
