@@ -7,34 +7,45 @@ export interface SimpleTableColumn<T> {
 
 interface SimpleTableProps<T> {
   columns: SimpleTableColumn<T>[];
+  emptyMessage?: string;
+  emptyTitle?: string;
   getRowKey: (row: T) => string;
   rows: T[];
 }
 
-export function SimpleTable<T>({ columns, getRowKey, rows }: SimpleTableProps<T>) {
+export function SimpleTable<T>({ columns, emptyMessage = "No records match the current view.", emptyTitle = "No records found", getRowKey, rows }: SimpleTableProps<T>) {
   return (
-    <div className="overflow-hidden rounded-lg bg-white shadow-[0_2px_18px_rgba(38,43,64,0.08)]">
+    <div className="tcms-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-          <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+          <thead className="bg-slate-50/90 text-xs font-bold uppercase tracking-wide text-slate-500">
             <tr>
               {columns.map((column) => (
-                <th className="px-4 py-3" key={column.header} scope="col">
+                <th className="whitespace-nowrap px-4 py-3.5" key={column.header} scope="col">
                   {column.header}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((row) => (
-              <tr className="hover:bg-[#F0F3FF]" key={getRowKey(row)}>
-                {columns.map((column) => (
-                  <td className="px-4 py-3 align-middle text-slate-700" key={column.header}>
-                    {column.render(row)}
-                  </td>
-                ))}
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {rows.length === 0 ? (
+              <tr>
+                <td className="px-4 py-10 text-center" colSpan={columns.length}>
+                  <p className="text-sm font-semibold text-[#262B40]">{emptyTitle}</p>
+                  <p className="mt-1 text-sm text-slate-500">{emptyMessage}</p>
+                </td>
               </tr>
-            ))}
+            ) : (
+              rows.map((row) => (
+                <tr className="transition hover:bg-[#F0F3FF]" key={getRowKey(row)}>
+                  {columns.map((column) => (
+                    <td className="whitespace-nowrap px-4 py-3.5 align-middle text-slate-700" key={column.header}>
+                      {column.render(row)}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
