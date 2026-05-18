@@ -1,7 +1,7 @@
 "use client";
 
-import { use } from "react";
 import Link from "next/link";
+import { useRouteId } from "@/hooks/useRouteId";
 import { useQuery } from "@tanstack/react-query";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -19,8 +19,9 @@ function DetailItem({ label, value }: { label: string; value?: string | null }) 
 }
 
 export default function GuardianDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+  const id = useRouteId(params);
   const { data: guardian, error, isLoading } = useQuery({
+    enabled: Boolean(id),
     queryKey: ["guardians", id],
     queryFn: () => getGuardian(id),
   });

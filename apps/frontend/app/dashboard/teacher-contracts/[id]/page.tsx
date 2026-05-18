@@ -1,7 +1,7 @@
 "use client";
 
-import { use } from "react";
 import Link from "next/link";
+import { useRouteId } from "@/hooks/useRouteId";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -28,8 +28,9 @@ const formatContractType = (value?: string) =>
     : "Not set";
 
 export default function TeacherContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+  const id = useRouteId(params);
   const { data: contract, error, isLoading } = useQuery({
+    enabled: Boolean(id),
     queryKey: ["teacher-contracts", id],
     queryFn: () => getTeacherContract(id),
   });

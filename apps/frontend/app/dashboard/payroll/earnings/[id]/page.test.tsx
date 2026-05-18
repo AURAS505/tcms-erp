@@ -67,7 +67,7 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <TeacherEarningDetailPage params={Promise.resolve({ id: "earning-1" })} />
+      <TeacherEarningDetailPage params={{ id: "earning-1" } as unknown as Promise<{ id: string }>} />
     </QueryClientProvider>,
   );
 }

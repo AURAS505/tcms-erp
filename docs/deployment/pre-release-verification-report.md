@@ -90,17 +90,17 @@ No backend, frontend, accounting, permission, or financial workflow logic was ch
 ## Known Limitations
 
 - Shell script syntax checks need a Unix-like shell or a working WSL/Git Bash installation.
-- Frontend dependency audit during Docker build reports npm vulnerabilities in the current dependency tree; see `docs/deployment/dependency-audit-report.md` for the focused audit and remediation decision.
+- Frontend dependency vulnerabilities were remediated after this original report; see `docs/deployment/dependency-audit-report.md`, `docs/deployment/frontend-dependency-upgrade-result.md`, and `docs/deployment/final-release-verification-report.md`.
 - Production deployment still needs platform-specific real domains, secrets, remote backup sync, monitoring provider DSNs, and formal RTO/RPO values.
 - Backend static/admin asset serving strategy should be finalized before go-live if Django admin/static files are required in production.
 
 ## Production Readiness Status
 
-The repository is pre-release ready from the available local verification perspective. All application tests, lint/type checks, local and production Docker Compose validation, and production Docker image builds passed. Remaining items are environment/platform operations rather than application workflow blockers.
+The repository was pre-release ready from the available local verification perspective at the time of this report. A post-upgrade final verification was completed later in `docs/deployment/final-release-verification-report.md`.
 
 ## Remaining Future Enhancements
 
-- Plan a dedicated major-version dependency upgrade for the unresolved Next.js and Vitest audit findings.
+- Migrate from `next lint` to the ESLint CLI before Next.js 16.
 - Wire a real monitoring provider SDK and release tagging.
 - Add encrypted remote backup sync and scheduled job examples.
 - Finalize production static/admin asset serving.

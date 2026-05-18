@@ -33,7 +33,7 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <AcademicYearDetailPage params={Promise.resolve({ id: "year-1" })} />
+      <AcademicYearDetailPage params={{ id: "year-1" } as unknown as Promise<{ id: string }>} />
     </QueryClientProvider>,
   );
 }

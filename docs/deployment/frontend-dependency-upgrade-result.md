@@ -31,7 +31,7 @@ After:
 
 ## Compatibility Changes
 
-Next.js 15 expects dynamic App Router `params` to be promise-like in generated route types. The affected client detail pages now unwrap `params` with React `use(params)`, and direct page tests pass `Promise.resolve({ id })`.
+Next.js 15 expects dynamic App Router `params` to be promise-like in generated route types. The affected client detail pages now use a small `useRouteId` helper that supports the Next.js 15 async route params contract without relying on React 19-only `use()` behavior in the current React 18 test/runtime path.
 
 Affected area:
 
@@ -71,6 +71,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
 - `npm run build`: passed.
 - `docker compose config --quiet`: passed.
 - `docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet`: passed.
+
+Post-upgrade release verification: `docs/deployment/final-release-verification-report.md`.
 
 ## Remaining Issues
 

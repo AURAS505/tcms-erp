@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, use } from "react";
+import { FormEvent } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useRouteId } from "@/hooks/useRouteId";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -55,11 +56,12 @@ const documentTypeOptions = [
 ];
 
 export default function JournalEntryDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+  const id = useRouteId(params);
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canMutate = accountingRoles.some((role) => hasRole(role));
   const { data: entry, error, isLoading } = useQuery({
+    enabled: Boolean(id),
     queryKey: ["journal-entries", id],
     queryFn: () => getJournalEntry(id),
   });

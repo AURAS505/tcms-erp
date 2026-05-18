@@ -1,7 +1,7 @@
 "use client";
 
-import { use } from "react";
 import Link from "next/link";
+import { useRouteId } from "@/hooks/useRouteId";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -20,8 +20,9 @@ function DetailItem({ label, value }: { label: string; value?: string | null }) 
 }
 
 export default function TeacherDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+  const id = useRouteId(params);
   const { data: teacher, error, isLoading } = useQuery({
+    enabled: Boolean(id),
     queryKey: ["teachers", id],
     queryFn: () => getTeacher(id),
   });

@@ -1,8 +1,8 @@
 "use client";
 
-import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useRouteId } from "@/hooks/useRouteId";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -29,8 +29,9 @@ const formatLabel = (value?: string) =>
     : "Not set";
 
 export default function FeePlanDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+  const id = useRouteId(params);
   const { data: plan, error, isLoading } = useQuery({
+    enabled: Boolean(id),
     queryKey: ["fee-plans", id],
     queryFn: () => getFeePlan(id),
   });

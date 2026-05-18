@@ -1,8 +1,8 @@
 "use client";
 
-import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useRouteId } from "@/hooks/useRouteId";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -36,11 +36,12 @@ const formatLabel = (value?: string) =>
     : "Not set";
 
 export default function TeacherEarningDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+  const id = useRouteId(params);
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canMutate = financialRoles.some((role) => hasRole(role));
   const { data: earning, error, isLoading, refetch } = useQuery({
+    enabled: Boolean(id),
     queryKey: ["teacher-earnings", id],
     queryFn: () => getTeacherEarning(id),
   });

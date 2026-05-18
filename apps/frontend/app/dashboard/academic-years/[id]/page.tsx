@@ -1,8 +1,8 @@
 "use client";
 
-import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useRouteId } from "@/hooks/useRouteId";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -27,12 +27,13 @@ function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
 }
 
 export default function AcademicYearDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+  const id = useRouteId(params);
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canSoftClose = rolloverRoles.some((role) => hasRole(role));
   const canHardClose = hardCloseRoles.some((role) => hasRole(role));
   const { data: year, error, isLoading } = useQuery({
+    enabled: Boolean(id),
     queryKey: ["academic-years", id],
     queryFn: () => getAcademicYear(id),
   });
