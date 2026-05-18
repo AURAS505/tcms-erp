@@ -58,6 +58,7 @@ Deployment documentation is indexed in `docs/deployment/README.md`.
 - Production release checklist: `docs/deployment/production-release-checklist.md`
 - Go-live runbook: `docs/deployment/go-live-runbook.md`
 - Rollback SOP: `docs/deployment/rollback-sop.md`
+- Final UI polish plan: `docs/design/final-ui-polish-plan.md`
 
 ## Source Document Status
 
