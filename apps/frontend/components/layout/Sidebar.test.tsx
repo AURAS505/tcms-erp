@@ -25,6 +25,14 @@ describe("Sidebar", () => {
 
     const dashboardLink = screen.getByRole("link", { name: "Dashboard" });
     expect(dashboardLink).toHaveAttribute("href", "/dashboard");
+    expect(dashboardLink).toHaveAttribute("aria-current", "page");
+    expect(screen.getByLabelText("Workspace")).toBeInTheDocument();
+    expect(screen.getByLabelText("Students, guardians, teachers")).toBeInTheDocument();
+    expect(screen.getByLabelText("Years and periods")).toBeInTheDocument();
+    expect(screen.getByLabelText("Subjects and enrollments")).toBeInTheDocument();
+    expect(screen.getByLabelText("Dues, invoices, payments")).toBeInTheDocument();
+    expect(screen.getByLabelText("Teacher earnings and payments")).toBeInTheDocument();
+    expect(screen.getByLabelText("Ledger and reports")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Students" })).toHaveAttribute("href", "/dashboard/students");
     expect(screen.getByRole("link", { name: "Student Inquiries" })).toHaveAttribute(
       "href",
@@ -101,5 +109,6 @@ describe("Sidebar", () => {
     render(<Sidebar user={{ ...user, roles: [] }} />);
 
     expect(screen.queryByRole("link", { name: "Dashboard" })).not.toBeInTheDocument();
+    expect(screen.getByText("No navigation is available for this role.")).toBeInTheDocument();
   });
 });

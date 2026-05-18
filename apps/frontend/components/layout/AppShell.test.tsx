@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/layout/AppShell";
 import { useAuth } from "@/hooks/useAuth";
@@ -95,5 +95,24 @@ describe("AppShell", () => {
 
     await waitFor(() => expect(screen.getByText("Protected content")).toBeInTheDocument());
     expect(screen.getAllByText("Admin User")).toHaveLength(2);
+  });
+
+  it("opens mobile navigation from the topbar button", async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      ...baseAuth,
+      isAuthenticated: true,
+      isLoading: false,
+      user,
+    });
+
+    render(
+      <AppShell>
+        <div>Protected content</div>
+      </AppShell>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+
+    expect(await screen.findByRole("dialog", { name: "Mobile navigation" })).toBeInTheDocument();
   });
 });

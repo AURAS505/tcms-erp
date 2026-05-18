@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
@@ -12,6 +13,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const [isMobileNavigationOpen, setIsMobileNavigationOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -45,11 +47,26 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F8FB]">
+    <div className="min-h-screen bg-[var(--tcms-color-bg)]">
       <Sidebar user={user} />
+      {isMobileNavigationOpen ? (
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-label="Mobile navigation" aria-modal="true">
+          <button
+            aria-label="Close navigation"
+            className="absolute inset-0 bg-slate-950/50"
+            onClick={() => setIsMobileNavigationOpen(false)}
+            type="button"
+          />
+          <Sidebar
+            className="relative z-50 flex h-full w-72 max-w-[86vw] flex-col border-r border-white/10 bg-[#262B40] text-slate-200 shadow-2xl"
+            onNavigate={() => setIsMobileNavigationOpen(false)}
+            user={user}
+          />
+        </div>
+      ) : null}
       <div className="lg:pl-64">
-        <Topbar user={user} />
-        <main className="px-4 py-6 lg:px-7">{children}</main>
+        <Topbar onMenuClick={() => setIsMobileNavigationOpen(true)} user={user} />
+        <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-5 lg:px-7">{children}</main>
       </div>
     </div>
   );
