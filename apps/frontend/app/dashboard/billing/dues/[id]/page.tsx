@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -20,10 +21,11 @@ function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
   );
 }
 
-export default function FeeDueDetailPage({ params }: { params: { id: string } }) {
+export default function FeeDueDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: due, error, isLoading } = useQuery({
-    queryKey: ["fee-dues", params.id],
-    queryFn: () => getFeeDue(params.id),
+    queryKey: ["fee-dues", id],
+    queryFn: () => getFeeDue(id),
   });
 
   return (

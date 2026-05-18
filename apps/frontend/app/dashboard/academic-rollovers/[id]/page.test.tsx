@@ -86,7 +86,7 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <AcademicRolloverDetailPage params={{ id: "rollover-1" }} />
+      <AcademicRolloverDetailPage params={Promise.resolve({ id: "rollover-1" })} />
     </QueryClientProvider>,
   );
 }

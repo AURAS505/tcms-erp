@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,18 +26,19 @@ function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
   );
 }
 
-export default function AcademicYearDetailPage({ params }: { params: { id: string } }) {
+export default function AcademicYearDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canSoftClose = rolloverRoles.some((role) => hasRole(role));
   const canHardClose = hardCloseRoles.some((role) => hasRole(role));
   const { data: year, error, isLoading } = useQuery({
-    queryKey: ["academic-years", params.id],
-    queryFn: () => getAcademicYear(params.id),
+    queryKey: ["academic-years", id],
+    queryFn: () => getAcademicYear(id),
   });
-  const refresh = () => void queryClient.invalidateQueries({ queryKey: ["academic-years", params.id] });
-  const softClose = useMutation({ mutationFn: () => softCloseAcademicYear(params.id, { reason: "Closed from dashboard" }), onSuccess: refresh });
-  const hardClose = useMutation({ mutationFn: () => hardCloseAcademicYear(params.id, { reason: "Hard closed from dashboard" }), onSuccess: refresh });
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ["academic-years", id] });
+  const softClose = useMutation({ mutationFn: () => softCloseAcademicYear(id, { reason: "Closed from dashboard" }), onSuccess: refresh });
+  const hardClose = useMutation({ mutationFn: () => hardCloseAcademicYear(id, { reason: "Hard closed from dashboard" }), onSuccess: refresh });
 
   return (
     <div className="space-y-5">

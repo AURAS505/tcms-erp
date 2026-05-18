@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,26 +35,27 @@ const formatLabel = (value?: string) =>
         .join(" ")
     : "Not set";
 
-export default function TeacherEarningDetailPage({ params }: { params: { id: string } }) {
+export default function TeacherEarningDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canMutate = financialRoles.some((role) => hasRole(role));
   const { data: earning, error, isLoading, refetch } = useQuery({
-    queryKey: ["teacher-earnings", params.id],
-    queryFn: () => getTeacherEarning(params.id),
+    queryKey: ["teacher-earnings", id],
+    queryFn: () => getTeacherEarning(id),
   });
   const approveMutation = useMutation({
-    mutationFn: () => approveTeacherEarning(params.id),
+    mutationFn: () => approveTeacherEarning(id),
     onSuccess: async (updatedEarning) => {
-      queryClient.setQueryData(["teacher-earnings", params.id], updatedEarning);
+      queryClient.setQueryData(["teacher-earnings", id], updatedEarning);
       await queryClient.invalidateQueries({ queryKey: ["teacher-earnings"] });
       await refetch();
     },
   });
   const postMutation = useMutation({
-    mutationFn: () => postTeacherEarning(params.id),
+    mutationFn: () => postTeacherEarning(id),
     onSuccess: async (updatedEarning) => {
-      queryClient.setQueryData(["teacher-earnings", params.id], updatedEarning);
+      queryClient.setQueryData(["teacher-earnings", id], updatedEarning);
       await queryClient.invalidateQueries({ queryKey: ["teacher-earnings"] });
       await refetch();
     },

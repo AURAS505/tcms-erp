@@ -50,7 +50,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
 
 ## Frontend Findings
 
-`npm audit` reported 10 vulnerabilities:
+Initial `npm audit` reported 10 vulnerabilities:
 
 - 4 high severity.
 - 6 moderate severity.
@@ -65,26 +65,16 @@ Affected areas:
 
 ## Fixes Applied
 
-No dependency version changes were applied.
+Step 23J completed the controlled upgrade plan without `npm audit fix --force`:
 
-`npm audit fix` was run without `--force`. It did not resolve the remaining vulnerabilities because npm only offered breaking major upgrades:
-
-- `next@16.2.6`
-- `eslint-config-next@16.2.6`
-- `vitest@4.1.6`
-
-The temporary lockfile normalization produced by `npm audit fix` was reverted because it did not remediate vulnerabilities and was unrelated to a safe dependency upgrade.
+- `next`: upgraded from `14.2.35` to `15.5.18`.
+- `eslint-config-next`: upgraded from `14.2.35` to `15.5.18`.
+- `vitest`: upgraded from `2.1.9` to `3.2.4`.
+- `postcss`: pinned and overridden to `8.5.14` so Next's nested vulnerable PostCSS is not installed.
 
 ## Remaining Vulnerabilities
 
-The npm vulnerabilities remain unresolved in this pass.
-
-Reason for deferral:
-
-- The available remediation paths require major framework/tooling upgrades.
-- Upgrading Next.js from 14 to 16 can affect App Router behavior, middleware, build output, lint integration, and deployment compatibility.
-- Upgrading Vitest from 2 to 4 can affect test runtime behavior and configuration.
-- These upgrades need a dedicated compatibility ticket with full frontend, backend integration, Docker production build, and manual smoke verification.
+No npm audit vulnerabilities remain after Step 23J.
 
 ## Recommendation
 
@@ -100,6 +90,8 @@ Recommended next review date: 2026-05-25, or earlier if the application is sched
 
 Detailed plan: `docs/deployment/frontend-dependency-upgrade-plan.md`.
 
+Execution result: `docs/deployment/frontend-dependency-upgrade-result.md`.
+
 ## Status
 
-Dependency audit completed and documented. No safe low-risk dependency remediations were available through non-forced tooling in this environment.
+Dependency audit completed and remediated for the frontend. Backend automated vulnerability tooling was unavailable in this environment, but `python -m pip check` passed.

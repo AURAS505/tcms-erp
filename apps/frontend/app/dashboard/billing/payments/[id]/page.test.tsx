@@ -51,7 +51,7 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <PaymentDetailPage params={{ id: "payment-1" }} />
+      <PaymentDetailPage params={Promise.resolve({ id: "payment-1" })} />
     </QueryClientProvider>,
   );
 }

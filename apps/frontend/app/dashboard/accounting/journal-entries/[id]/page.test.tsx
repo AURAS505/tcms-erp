@@ -76,7 +76,7 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <JournalEntryDetailPage params={{ id: "entry-1" }} />
+      <JournalEntryDetailPage params={Promise.resolve({ id: "entry-1" })} />
     </QueryClientProvider>,
   );
 }

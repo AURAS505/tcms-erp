@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -17,10 +18,11 @@ function DetailItem({ label, value }: { label: string; value?: string | null }) 
   );
 }
 
-export default function GuardianDetailPage({ params }: { params: { id: string } }) {
+export default function GuardianDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: guardian, error, isLoading } = useQuery({
-    queryKey: ["guardians", params.id],
-    queryFn: () => getGuardian(params.id),
+    queryKey: ["guardians", id],
+    queryFn: () => getGuardian(id),
   });
 
   return (

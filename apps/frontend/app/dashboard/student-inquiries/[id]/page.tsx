@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -17,10 +18,11 @@ function DetailItem({ label, value }: { label: string; value?: string | null }) 
   );
 }
 
-export default function StudentInquiryDetailPage({ params }: { params: { id: string } }) {
+export default function StudentInquiryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: inquiry, error, isLoading } = useQuery({
-    queryKey: ["student-inquiries", params.id],
-    queryFn: () => getStudentInquiry(params.id),
+    queryKey: ["student-inquiries", id],
+    queryFn: () => getStudentInquiry(id),
   });
 
   return (

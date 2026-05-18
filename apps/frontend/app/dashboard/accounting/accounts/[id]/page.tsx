@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -26,10 +27,11 @@ const formatLabel = (value?: string) =>
         .join(" ")
     : "Not set";
 
-export default function AccountDetailPage({ params }: { params: { id: string } }) {
+export default function AccountDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: account, error, isLoading } = useQuery({
-    queryKey: ["accounts", params.id],
-    queryFn: () => getAccount(params.id),
+    queryKey: ["accounts", id],
+    queryFn: () => getAccount(id),
   });
 
   return (

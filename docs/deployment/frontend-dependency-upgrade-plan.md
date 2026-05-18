@@ -4,7 +4,7 @@ Date: 2026-05-18
 
 ## Scope
 
-This plan covers the remaining frontend npm audit findings from the stable TCMS ERP frontend. It is a planning document only. No dependency versions were changed in this step, and `npm audit fix --force` was not run.
+This plan covered the remaining frontend npm audit findings from the stable TCMS ERP frontend. It was executed in Step 23J without using `npm audit fix --force`.
 
 ## Current Frontend Dependency Versions
 
@@ -185,17 +185,14 @@ npm run build
 
 ## Recommended Future Upgrade Step
 
+Execution result:
+
+```text
+docs/deployment/frontend-dependency-upgrade-result.md
+```
+
 Next recommended implementation step:
 
 ```text
-STEP 23J — Frontend Dependency Major Upgrade Execution
+STEP 23K - Final Release Verification After Dependency Upgrade
 ```
-
-Suggested scope:
-
-- Upgrade Next.js and `eslint-config-next` first.
-- Run and fix lint/type/build issues.
-- Upgrade Vitest/Vite tooling separately.
-- Run final `npm audit`.
-- Build production Docker frontend image.
-- Commit only after all checks pass.

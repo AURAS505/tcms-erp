@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -18,10 +19,11 @@ function DetailItem({ label, value }: { label: string; value?: string | number |
   );
 }
 
-export default function ClassDetailPage({ params }: { params: { id: string } }) {
+export default function ClassDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: classRoom, error, isLoading } = useQuery({
-    queryKey: ["classes", params.id],
-    queryFn: () => getClass(params.id),
+    queryKey: ["classes", id],
+    queryFn: () => getClass(id),
   });
 
   return (

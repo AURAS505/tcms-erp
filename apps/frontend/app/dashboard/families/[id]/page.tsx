@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -17,10 +18,11 @@ function DetailItem({ label, value }: { label: string; value?: string | null }) 
   );
 }
 
-export default function FamilyDetailPage({ params }: { params: { id: string } }) {
+export default function FamilyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: family, error, isLoading } = useQuery({
-    queryKey: ["families", params.id],
-    queryFn: () => getFamily(params.id),
+    queryKey: ["families", id],
+    queryFn: () => getFamily(id),
   });
 
   return (

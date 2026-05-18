@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -26,18 +27,19 @@ function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
   );
 }
 
-export default function PaymentDetailPage({ params }: { params: { id: string } }) {
+export default function PaymentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canApprove = approverRoles.some((role) => hasRole(role));
   const { data: payment, error, isLoading, refetch } = useQuery({
-    queryKey: ["student-payments", params.id],
-    queryFn: () => getStudentPayment(params.id),
+    queryKey: ["student-payments", id],
+    queryFn: () => getStudentPayment(id),
   });
   const approveMutation = useMutation({
-    mutationFn: () => approveStudentPayment(params.id),
+    mutationFn: () => approveStudentPayment(id),
     onSuccess: async (updatedPayment) => {
-      queryClient.setQueryData(["student-payments", params.id], updatedPayment);
+      queryClient.setQueryData(["student-payments", id], updatedPayment);
       await queryClient.invalidateQueries({ queryKey: ["student-payments"] });
       await refetch();
     },

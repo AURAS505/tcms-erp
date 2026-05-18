@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -26,26 +27,27 @@ function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
   );
 }
 
-export default function TeacherPaymentDetailPage({ params }: { params: { id: string } }) {
+export default function TeacherPaymentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canMutate = financialRoles.some((role) => hasRole(role));
   const { data: payment, error, isLoading, refetch } = useQuery({
-    queryKey: ["teacher-payments", params.id],
-    queryFn: () => getTeacherPayment(params.id),
+    queryKey: ["teacher-payments", id],
+    queryFn: () => getTeacherPayment(id),
   });
   const approveMutation = useMutation({
-    mutationFn: () => approveTeacherPayment(params.id),
+    mutationFn: () => approveTeacherPayment(id),
     onSuccess: async (updatedPayment) => {
-      queryClient.setQueryData(["teacher-payments", params.id], updatedPayment);
+      queryClient.setQueryData(["teacher-payments", id], updatedPayment);
       await queryClient.invalidateQueries({ queryKey: ["teacher-payments"] });
       await refetch();
     },
   });
   const postMutation = useMutation({
-    mutationFn: () => postTeacherPayment(params.id),
+    mutationFn: () => postTeacherPayment(id),
     onSuccess: async (updatedPayment) => {
-      queryClient.setQueryData(["teacher-payments", params.id], updatedPayment);
+      queryClient.setQueryData(["teacher-payments", id], updatedPayment);
       await queryClient.invalidateQueries({ queryKey: ["teacher-payments"] });
       await refetch();
     },

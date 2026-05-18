@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -18,10 +19,11 @@ function DetailItem({ label, value }: { label: string; value?: string | null }) 
   );
 }
 
-export default function TeacherDetailPage({ params }: { params: { id: string } }) {
+export default function TeacherDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: teacher, error, isLoading } = useQuery({
-    queryKey: ["teachers", params.id],
-    queryFn: () => getTeacher(params.id),
+    queryKey: ["teachers", id],
+    queryFn: () => getTeacher(id),
   });
 
   return (

@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -20,10 +21,11 @@ function DetailItem({ label, value }: { label: string; value?: ReactNode }) {
   );
 }
 
-export default function TeacherPaymentBatchDetailPage({ params }: { params: { id: string } }) {
+export default function TeacherPaymentBatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: batch, error, isLoading } = useQuery({
-    queryKey: ["teacher-payment-batches", params.id],
-    queryFn: () => getTeacherPaymentBatch(params.id),
+    queryKey: ["teacher-payment-batches", id],
+    queryFn: () => getTeacherPaymentBatch(id),
   });
 
   return (

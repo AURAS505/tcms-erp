@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -27,10 +28,11 @@ const formatLabel = (value?: string) =>
         .join(" ")
     : "Not set";
 
-export default function FeePlanDetailPage({ params }: { params: { id: string } }) {
+export default function FeePlanDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const { data: plan, error, isLoading } = useQuery({
-    queryKey: ["fee-plans", params.id],
-    queryFn: () => getFeePlan(params.id),
+    queryKey: ["fee-plans", id],
+    queryFn: () => getFeePlan(id),
   });
 
   return (

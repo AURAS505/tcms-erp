@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, use } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
@@ -26,35 +26,36 @@ function rolloverJournalKind(entry: JournalEntry) {
   return "Rollover";
 }
 
-export default function AcademicRolloverDetailPage({ params }: { params: { id: string } }) {
+export default function AcademicRolloverDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canMutate = rolloverRoles.some((role) => hasRole(role));
   const { data: rollover, error, isLoading } = useQuery({
-    queryKey: ["academic-rollovers", params.id],
-    queryFn: () => getAcademicRollover(params.id),
+    queryKey: ["academic-rollovers", id],
+    queryFn: () => getAcademicRollover(id),
   });
   const summary = useQuery({
-    queryKey: ["academic-rollovers", params.id, "summary"],
-    queryFn: () => getAcademicRolloverSummary(params.id),
+    queryKey: ["academic-rollovers", id, "summary"],
+    queryFn: () => getAcademicRolloverSummary(id),
   });
   const generatedJournals = useQuery({
-    queryKey: ["academic-rollovers", params.id, "generated-journals"],
+    queryKey: ["academic-rollovers", id, "generated-journals"],
     queryFn: () =>
       listJournalEntries({
         source_app: "academic",
         source_model: "AcademicYearRollover",
-        source_object_id: params.id,
+        source_object_id: id,
         source_type: "system",
       }),
   });
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ["academic-rollovers", params.id] });
-    void queryClient.invalidateQueries({ queryKey: ["academic-rollovers", params.id, "summary"] });
-    void queryClient.invalidateQueries({ queryKey: ["academic-rollovers", params.id, "generated-journals"] });
+    void queryClient.invalidateQueries({ queryKey: ["academic-rollovers", id] });
+    void queryClient.invalidateQueries({ queryKey: ["academic-rollovers", id, "summary"] });
+    void queryClient.invalidateQueries({ queryKey: ["academic-rollovers", id, "generated-journals"] });
   };
-  const validateMutation = useMutation({ mutationFn: () => validateAcademicRollover(params.id), onSuccess: refresh });
-  const cancelMutation = useMutation({ mutationFn: () => cancelAcademicRollover(params.id, { reason: "Cancelled from dashboard" }), onSuccess: refresh });
+  const validateMutation = useMutation({ mutationFn: () => validateAcademicRollover(id), onSuccess: refresh });
+  const cancelMutation = useMutation({ mutationFn: () => cancelAcademicRollover(id, { reason: "Cancelled from dashboard" }), onSuccess: refresh });
   const executeMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof executeAcademicRollover>[1] }) =>
       executeAcademicRollover(id, payload),
@@ -68,7 +69,7 @@ export default function AcademicRolloverDetailPage({ params }: { params: { id: s
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     executeMutation.mutate({
-      id: params.id,
+      id: id,
       payload: {
         hard_close: formData.get("hard_close") === "on",
         new_year_data: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, use } from "react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -54,13 +54,14 @@ const documentTypeOptions = [
   { label: "Other", value: "other" },
 ];
 
-export default function JournalEntryDetailPage({ params }: { params: { id: string } }) {
+export default function JournalEntryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const queryClient = useQueryClient();
   const { hasRole } = useAuth();
   const canMutate = accountingRoles.some((role) => hasRole(role));
   const { data: entry, error, isLoading } = useQuery({
-    queryKey: ["journal-entries", params.id],
-    queryFn: () => getJournalEntry(params.id),
+    queryKey: ["journal-entries", id],
+    queryFn: () => getJournalEntry(id),
   });
   const lines = useQuery({
     enabled: Boolean(entry?.entry_number),
@@ -69,17 +70,17 @@ export default function JournalEntryDetailPage({ params }: { params: { id: strin
   });
 
   const refreshEntry = () => {
-    void queryClient.invalidateQueries({ queryKey: ["journal-entries", params.id] });
+    void queryClient.invalidateQueries({ queryKey: ["journal-entries", id] });
     void queryClient.invalidateQueries({ queryKey: ["journal-entry-lines", entry?.entry_number] });
   };
-  const approveMutation = useMutation({ mutationFn: () => approveJournalEntry(params.id), onSuccess: refreshEntry });
-  const postMutation = useMutation({ mutationFn: () => postJournalEntry(params.id), onSuccess: refreshEntry });
+  const approveMutation = useMutation({ mutationFn: () => approveJournalEntry(id), onSuccess: refreshEntry });
+  const postMutation = useMutation({ mutationFn: () => postJournalEntry(id), onSuccess: refreshEntry });
   const reverseMutation = useMutation({
-    mutationFn: () => reverseJournalEntry(params.id, { narration: `Reversal of ${entry?.entry_number ?? "journal entry"}` }),
+    mutationFn: () => reverseJournalEntry(id, { narration: `Reversal of ${entry?.entry_number ?? "journal entry"}` }),
     onSuccess: refreshEntry,
   });
   const documentMutation = useMutation({
-    mutationFn: (payload: AccountingDocumentInput) => attachAccountingDocument(params.id, payload),
+    mutationFn: (payload: AccountingDocumentInput) => attachAccountingDocument(id, payload),
   });
 
   const showApprove = canMutate && entry && ["draft", "pending_approval"].includes(entry.status);
